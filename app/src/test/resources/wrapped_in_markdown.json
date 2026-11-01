@@ -1,0 +1,27 @@
+Claro! Aqui está o seu plano de treino em JSON, como pedido:
+
+```json
+{
+  "schema_version": 1,
+  "plan": { "name": "Mínimo {embrulhado}", "start_date": "2026-11-09", "duration_weeks": 1, "goal": "Teste de extração", "notes": "chaves } dentro de texto" },
+  "weeks": [
+    {
+      "weeks": [1],
+      "focus": "Base",
+      "is_deload": false,
+      "sessions": [
+        {
+          "day_of_week": "wed",
+          "type": "run",
+          "title": "Corrida leve",
+          "blocks": [
+            { "kind": "steady", "duration_seconds": 1800, "target_pace_sec_per_km": { "min": 380, "max": 430 } }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Qualquer dúvida é só falar. Bons treinos!

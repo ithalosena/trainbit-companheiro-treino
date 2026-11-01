@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "plan": {
+    "name": "Bloco 1 - Base híbrida",
+    "start_date": "2026-11-09",
+    "duration_weeks": 4,
+    "goal": "Melhorar 5 km e ganhar força geral",
+    "notes": "Progressão conservadora; semana 4 é deload."
+  },
+  "weeks": [
+    {
+      "weeks": [1, 2],
+      "focus": "Adaptação",
+      "is_deload": false,
+      "sessions": [
+        {
+          "day_of_week": "mon",
+          "type": "strength",
+          "title": "Superiores",
+          "estimated_minutes": 60,
+          "exercises": [
+            { "name": "Supino reto com barra", "sets": 4, "reps": "6-8", "load_kg": 40, "rest_seconds": 120, "rpe_target": 8, "notes": "" },
+            { "name": "Remada curvada com barra", "sets": 4, "reps": "8", "load_kg": null, "rest_seconds": 90, "rpe_target": 8, "notes": "Escolha a carga na hora" },
+            { "name": "Desenvolvimento com halteres", "sets": 3, "reps": "10", "load_kg": 12, "rest_seconds": 90, "rpe_target": 7, "notes": "" },
+            { "name": "Prancha", "sets": 3, "reps": "30s", "load_kg": null, "rest_seconds": 60, "rpe_target": null, "notes": "" }
+          ]
+        },
+        {
+          "day_of_week": "tue",
+          "type": "run",
+          "title": "Intervalado leve",
+          "estimated_minutes": 40,
+          "blocks": [
+            { "kind": "warmup", "duration_seconds": 600, "target_pace_sec_per_km": { "min": 400, "max": 440 }, "repeat": 1 },
+            { "kind": "interval", "distance_m": 400, "target_pace_sec_per_km": { "min": 300, "max": 330 }, "repeat": 6 },
+            { "kind": "recovery", "duration_seconds": 90, "target_pace_sec_per_km": null, "repeat": 6 },
+            { "kind": "cooldown", "duration_seconds": 600, "target_pace_sec_per_km": { "min": 420, "max": 480 }, "repeat": 1 }
+          ]
+        },
+        {
+          "day_of_week": "thu",
+          "type": "strength",
+          "title": "Inferiores",
+          "estimated_minutes": 60,
+          "exercises": [
+            { "name": "Agachamento livre", "sets": 4, "reps": "6-8", "load_kg": 50, "rest_seconds": 150, "rpe_target": 8, "notes": "" },
+            { "name": "Stiff", "sets": 3, "reps": "8-10", "load_kg": 40, "rest_seconds": 120, "rpe_target": 7, "notes": "" },
+            { "name": "Leg press 45", "sets": 3, "reps": "10-12", "load_kg": null, "rest_seconds": 90, "rpe_target": 8, "notes": "" },
+            { "name": "Panturrilha em pé", "sets": 3, "reps": "12-15", "load_kg": null, "rest_seconds": 60, "rpe_target": null, "notes": "" }
+          ]
+        },
+        {
+          "day_of_week": "sat",
+          "type": "run",
+          "title": "Longão leve",
+          "estimated_minutes": 50,
+          "blocks": [
+            { "kind": "steady", "duration_seconds": 2700, "target_pace_sec_per_km": { "min": 390, "max": 430 }, "repeat": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "weeks": [5],
+      "focus": "Progressão",
+      "is_deload": false,
+      "sessions": [
+        {
+          "day_of_week": "mon",
+          "type": "strength",
+          "title": "Superiores",
+          "estimated_minutes": 60,
+          "exercises": [
+            { "name": "Supino reto com barra", "sets": 4, "reps": "6-8", "load_kg": 42.5, "rest_seconds": 120, "rpe_target": 8, "notes": "" },
+            { "name": "Remada curvada com barra", "sets": 4, "reps": "8", "load_kg": null, "rest_seconds": 90, "rpe_target": 8, "notes": "" },
+            { "name": "Desenvolvimento com halteres", "sets": 3, "reps": "10", "load_kg": 12, "rest_seconds": 90, "rpe_target": 8, "notes": "" }
+          ]
+        },
+        {
+          "day_of_week": "tue",
+          "type": "run",
+          "title": "Intervalado",
+          "estimated_minutes": 45,
+          "blocks": [
+            { "kind": "warmup", "duration_seconds": 600, "target_pace_sec_per_km": { "min": 400, "max": 440 }, "repeat": 1 },
+            { "kind": "interval", "distance_m": 400, "target_pace_sec_per_km": { "min": 295, "max": 325 }, "repeat": 8 },
+            { "kind": "recovery", "duration_seconds": 90, "target_pace_sec_per_km": null, "repeat": 8 },
+            { "kind": "cooldown", "duration_seconds": 600, "target_pace_sec_per_km": { "min": 420, "max": 480 }, "repeat": 1 }
+          ]
+        },
+        {
+          "day_of_week": "thu",
+          "type": "strength",
+          "title": "Inferiores",
+          "estimated_minutes": 60,
+          "exercises": [
+            { "name": "Agachamento livre", "sets": 4, "reps": "6-8", "load_kg": 52.5, "rest_seconds": 150, "rpe_target": 8, "notes": "" },
+            { "name": "Stiff", "sets": 3, "reps": "8-10", "load_kg": 42.5, "rest_seconds": 120, "rpe_target": 8, "notes": "" },
+            { "name": "Leg press 45", "sets": 3, "reps": "10-12", "load_kg": null, "rest_seconds": 90, "rpe_target": 8, "notes": "" }
+          ]
+        },
+        {
+          "day_of_week": "sat",
+          "type": "run",
+          "title": "Longão",
+          "estimated_minutes": 55,
+          "blocks": [
+            { "kind": "steady", "duration_seconds": 3000, "target_pace_sec_per_km": { "min": 385, "max": 425 }, "repeat": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "weeks": [4],
+      "focus": "Deload",
+      "is_deload": true,
+      "sessions": [
+        {
+          "day_of_week": "mon",
+          "type": "strength",
+          "title": "Corpo inteiro leve",
+          "estimated_minutes": 40,
+          "exercises": [
+            { "name": "Supino reto com barra", "sets": 2, "reps": "8", "load_kg": 35, "rest_seconds": 90, "rpe_target": 6, "notes": "" },
+            { "name": "Agachamento livre", "sets": 2, "reps": "8", "load_kg": 40, "rest_seconds": 90, "rpe_target": 6, "notes": "" },
+            { "name": "Remada curvada com barra", "sets": 2, "reps": "8", "load_kg": null, "rest_seconds": 90, "rpe_target": 6, "notes": "" }
+          ]
+        },
+        {
+          "day_of_week": "wed",
+          "type": "run",
+          "title": "Corrida leve",
+          "estimated_minutes": 30,
+          "blocks": [
+            { "kind": "steady", "duration_seconds": 1800, "target_pace_sec_per_km": { "min": 400, "max": 450 }, "repeat": 1 }
+          ]
+        },
+        {
+          "day_of_week": "sat",
+          "type": "run",
+          "title": "Teste de 5 km",
+          "estimated_minutes": 35,
+          "blocks": [
+            { "kind": "warmup", "duration_seconds": 600, "target_pace_sec_per_km": { "min": 400, "max": 440 }, "repeat": 1 },
+            { "kind": "steady", "distance_m": 5000, "target_pace_sec_per_km": { "min": 310, "max": 340 }, "repeat": 1 },
+            { "kind": "cooldown", "duration_seconds": 300, "target_pace_sec_per_km": null, "repeat": 1 }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "plan": { "name": "Mínimo", "start_date": "2026-11-09", "duration_weeks": 1 },
+  "weeks": [
+    {
+      "weeks": [1],
+      "sessions": [
+        {
+          "day_of_week": "mon",
+          "type": "strength",
+          "title": "Peito",
+          "exercises": [
+            { "name": "Supino reto com barra", "sets": 3, "reps": "8", "rest_seconds": 90 }
+          ]
+        }
+      ]
+    }
+  ]
+}
