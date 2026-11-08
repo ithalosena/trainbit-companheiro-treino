@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ system splash: the pixel logo on paper, then the in-app boot screen takes over. -->
+    <style name="Theme.HybridCoach" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper_light</item>
+        <item name="android:windowSplashScreenBackground">@color/paper_light</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/paper_light</item>
+    </style>
+</resources>

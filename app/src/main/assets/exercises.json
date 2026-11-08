@@ -60,6 +60,7 @@
     { "id": "russian-twist", "canonical_name": "Rotação russa", "aliases": ["russian twist", "abdominal oblíquo com rotação", "rotacao russa"] },
     { "id": "bird-dog", "canonical_name": "Bird dog", "aliases": ["bird-dog", "cachorro e pássaro", "quadrupede alternado"] },
     { "id": "remada-alta", "canonical_name": "Remada alta", "aliases": ["upright row", "remada em pé"] },
-    { "id": "good-morning", "canonical_name": "Good morning", "aliases": ["bom dia", "good-morning", "bom-dia"] }
+    { "id": "good-morning", "canonical_name": "Good morning", "aliases": ["bom dia", "good-morning", "bom-dia"] },
+    { "id": "bike-ergometrica", "canonical_name": "Bike ergométrica", "aliases": ["bike", "bicicleta ergométrica", "bicicleta", "ergométrica", "spinning", "stationary bike"] }
   ]
 }

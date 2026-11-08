@@ -245,7 +245,7 @@ Objetivo: coach de voz que avisa pace, tempo e marcos, **sem frequência cardía
 Trabalhe **somente a fase solicitada**. Ao terminar, rode os testes, atualize `README.md` e `docs/ASSUMPTIONS.md`, faça commit e pare.
 
 **Fase 0 — Contrato (sem UI)**
-- Entregar: `docs/schema_v1.md` (versão final do formato), `assets/prompt_template.md`, `assets/exercises.json` (≈60 exercícios), fixtures em `app/src/test/resources/`: `valid_full.json`, `valid_min.json`, `invalid_missing_field.json`, `invalid_pace_range.json`, `invalid_week_gap.json`, `wrapped_in_markdown.json`.
+- Entregar: `schema/schema_v1.md` (versão final do formato), `assets/prompt_template.md`, `assets/exercises.json` (≈60 exercícios), fixtures em `app/src/test/resources/`: `valid_full.json`, `valid_min.json`, `invalid_missing_field.json`, `invalid_pace_range.json`, `invalid_week_gap.json`, `wrapped_in_markdown.json`.
 - Aceite: validador (módulo Kotlin puro, sem Android) com testes passando em todas as fixtures.
 
 **Fase 1 — Plano e calendário**

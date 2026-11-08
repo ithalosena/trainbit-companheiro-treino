@@ -26,6 +26,35 @@ class PlanValidatorTest {
     }
 
     @Test
+    fun `home_exercises is optional and validated like exercises`() {
+        val plain = assertNotNull(PlanValidator.validateText(fixture("valid_min.json")).document)
+        assertEquals(emptyList(), (plain.weeks[0].sessions[0] as StrengthSessionDef).homeExercises)
+
+        val home = "\"home_exercises\": [ { \"name\": \"Flexão de braço\", \"sets\": 3, \"reps\": \"12\", \"rest_seconds\": 60 } ],\n          \"exercises\""
+        val withHome = PlanValidator.validateText(fixture("valid_min.json").replace("\"exercises\"", home))
+        assertEquals(emptyList(), withHome.warnings)
+        val session = assertNotNull(withHome.document).weeks[0].sessions[0] as StrengthSessionDef
+        assertEquals("Flexão de braço", session.homeExercises.single().name)
+
+        val broken = PlanValidator.validateText(fixture("valid_min.json").replace("\"exercises\"", home.replace("\"12\"", "12")))
+        assertEquals(listOf("weeks[0].sessions[0].home_exercises[0].reps: esperado texto (ex.: \"8\" ou \"6-8\"), veio 12"), broken.errors)
+    }
+
+    @Test
+    fun `optional marks a complementary session and must be a boolean`() {
+        val plain = assertNotNull(PlanValidator.validateText(fixture("valid_min.json")).document)
+        assertEquals(false, plain.weeks[0].sessions[0].optional)
+
+        val extra = PlanValidator.validateText(fixture("valid_min.json").replace("\"exercises\"", "\"optional\": true,\n          \"exercises\""))
+        assertEquals(emptyList(), extra.errors)
+        assertEquals(emptyList(), extra.warnings)
+        assertEquals(true, assertNotNull(extra.document).weeks[0].sessions[0].optional)
+
+        val broken = PlanValidator.validateText(fixture("valid_min.json").replace("\"exercises\"", "\"optional\": \"sim\",\n          \"exercises\""))
+        assertEquals(listOf("weeks[0].sessions[0].optional: esperado true ou false"), broken.errors)
+    }
+
+    @Test
     fun `valid_full parses strength and run details`() {
         val doc = assertNotNull(PlanValidator.validateText(fixture("valid_full.json")).document)
         val monday = doc.weeks[0].sessions[0] as StrengthSessionDef

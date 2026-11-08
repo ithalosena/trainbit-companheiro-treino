@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -234,11 +235,12 @@ object PlanValidator {
         }
 
         fun session(o: JsonObject, path: String): SessionDef? {
-            unknownFields(o, setOf("day_of_week", "type", "title", "estimated_minutes", "exercises", "blocks"), path)
+            unknownFields(o, setOf("day_of_week", "type", "title", "estimated_minutes", "optional", "exercises", "home_exercises", "blocks"), path)
             val day = dayOfWeek(o, path)
             val type = string(o, "type", path)
             val title = string(o, "title", path)
             val minutes = int(o, "estimated_minutes", path, 1..600, required = false)
+            val optional = optionalFlag(o, path)
             if (type != null && type != "strength" && type != "run") {
                 error("$path.type", "esperado \"strength\" ou \"run\", veio \"$type\"")
                 return null
@@ -251,21 +253,43 @@ object PlanValidator {
                         obj(el, "$path.exercises[$i]")?.let { exercise(it, "$path.exercises[$i]") }
                     }
                     if (arr != null && arr.isEmpty()) error("$path.exercises", "esperado ao menos um exercício")
-                    if (day == null || title == null || exercises == null || exercises.size != arr?.size || arr?.isEmpty() != false) null
-                    else StrengthSessionDef(day, title, minutes, exercises)
+                    val home = homeExercises(o, path)
+                    if (day == null || title == null || exercises == null || exercises.size != arr?.size || arr?.isEmpty() != false || home == null) null
+                    else StrengthSessionDef(day, title, minutes, exercises, home, optional)
                 }
                 "run" -> {
                     if (o.containsKey("exercises")) warn("$path.exercises", "sessão de corrida não usa exercises, ignorado")
+                    if (o.containsKey("home_exercises")) warn("$path.home_exercises", "sessão de corrida não usa home_exercises, ignorado")
                     val arr = array(o, "blocks", path)
                     val blocks = arr?.mapIndexedNotNull { i, el ->
                         obj(el, "$path.blocks[$i]")?.let { runBlock(it, "$path.blocks[$i]") }
                     }
                     if (arr != null && arr.isEmpty()) error("$path.blocks", "esperado ao menos um bloco")
                     if (day == null || title == null || blocks == null || blocks.size != arr?.size || arr?.isEmpty() != false) null
-                    else RunSessionDef(day, title, minutes, blocks)
+                    else RunSessionDef(day, title, minutes, blocks, optional)
                 }
                 else -> null
             }
+        }
+
+        /** `optional`: a complementary session. Absent or null is false; anything but true/false is an error. */
+        fun optionalFlag(o: JsonObject, path: String): Boolean {
+            val el = o["optional"]
+            if (el == null || el is JsonNull) return false
+            val v = (el as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
+            if (v == null) error("$path.optional", "esperado true ou false")
+            return v == true
+        }
+
+        /** Optional `home_exercises`: absent, null or empty means no home version. Null result means errors. */
+        fun homeExercises(o: JsonObject, path: String): List<ExerciseDef>? {
+            val el = o["home_exercises"]
+            if (el == null || el is JsonNull) return emptyList()
+            val arr = array(o, "home_exercises", path) ?: return null
+            val list = arr.mapIndexedNotNull { i, item ->
+                obj(item, "$path.home_exercises[$i]")?.let { exercise(it, "$path.home_exercises[$i]") }
+            }
+            return if (list.size == arr.size) list else null
         }
 
         fun dayOfWeek(o: JsonObject, path: String): DayOfWeek? {

@@ -1,0 +1,203 @@
+{
+ "version": 1,
+ "frameWidth": 56,
+ "frameHeight": 76,
+ "tones": [
+  "#3E3D36",
+  "#8C8573",
+  "#B8B09B",
+  "#EAE4D4"
+ ],
+ "animations": [
+  {
+   "name": "idle",
+   "frame": "idle",
+   "row": 0,
+   "frames": 4,
+   "frameMs": 400
+  },
+  {
+   "name": "blink",
+   "frame": "blink",
+   "row": 1,
+   "frames": 4,
+   "frameMs": 400
+  },
+  {
+   "name": "walk",
+   "frame": "walk",
+   "row": 2,
+   "frames": 4,
+   "frameMs": 200
+  },
+  {
+   "name": "flex",
+   "frame": "flex",
+   "row": 3,
+   "frames": 4,
+   "frameMs": 200
+  },
+  {
+   "name": "train_run",
+   "frame": "run",
+   "row": 4,
+   "frames": 6,
+   "frameMs": 200
+  },
+  {
+   "name": "train_strength",
+   "frame": "lift",
+   "row": 5,
+   "frames": 6,
+   "frameMs": 200
+  },
+  {
+   "name": "celebrate",
+   "frame": "cheer",
+   "row": 6,
+   "frames": 6,
+   "frameMs": 200
+  },
+  {
+   "name": "tired",
+   "frame": "tired",
+   "row": 7,
+   "frames": 4,
+   "frameMs": 400
+  },
+  {
+   "name": "sluggish",
+   "frame": "sluggish",
+   "row": 8,
+   "frames": 4,
+   "frameMs": 600
+  },
+  {
+   "name": "sleeping",
+   "frame": "sleep",
+   "row": 9,
+   "frames": 2,
+   "frameMs": 800
+  }
+ ],
+ "effects": {
+  "z_a": {
+   "x": 43,
+   "y": 22,
+   "rect": [
+    0,
+    760,
+    4,
+    4
+   ]
+  },
+  "z_b": {
+   "x": 45,
+   "y": 12,
+   "rect": [
+    5,
+    760,
+    6,
+    6
+   ]
+  }
+ },
+ "items": {
+  "sticker_cartridge": {
+   "slot": "sticker",
+   "anchor": "floor",
+   "x": 1,
+   "y": 68,
+   "rect": [
+    12,
+    760,
+    7,
+    6
+   ]
+  },
+  "sticker_coin": {
+   "slot": "sticker",
+   "anchor": "floor",
+   "x": 1,
+   "y": 68,
+   "rect": [
+    20,
+    760,
+    7,
+    6
+   ]
+  },
+  "sticker_dumbbell": {
+   "slot": "sticker",
+   "anchor": "floor",
+   "x": 1,
+   "y": 68,
+   "rect": [
+    28,
+    760,
+    7,
+    6
+   ]
+  },
+  "sticker_floppy": {
+   "slot": "sticker",
+   "anchor": "floor",
+   "x": 1,
+   "y": 68,
+   "rect": [
+    36,
+    760,
+    7,
+    6
+   ]
+  },
+  "sticker_heart": {
+   "slot": "sticker",
+   "anchor": "floor",
+   "x": 1,
+   "y": 68,
+   "rect": [
+    44,
+    760,
+    7,
+    6
+   ]
+  },
+  "sticker_hourglass": {
+   "slot": "sticker",
+   "anchor": "floor",
+   "x": 1,
+   "y": 68,
+   "rect": [
+    52,
+    760,
+    7,
+    6
+   ]
+  },
+  "sticker_shoe": {
+   "slot": "sticker",
+   "anchor": "floor",
+   "x": 1,
+   "y": 68,
+   "rect": [
+    60,
+    760,
+    7,
+    6
+   ]
+  },
+  "sticker_skull": {
+   "slot": "sticker",
+   "anchor": "floor",
+   "x": 1,
+   "y": 68,
+   "rect": [
+    68,
+    760,
+    7,
+    6
+   ]
+  }
+ }
+}

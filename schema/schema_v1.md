@@ -31,7 +31,9 @@ Contrato entre a IA (que gera o plano) e o app (que valida e importa). O app **r
 | `type` | texto | sim | `strength` ou `run` |
 | `title` | texto | sim | não vazio |
 | `estimated_minutes` | inteiro | não | 1 a 600 |
+| `optional` | true/false | não | padrão `false`; `true` numa sessão complementar (bike em casa, corrida extra, segundo treino leve): não fazer não conta como falta |
 | `exercises` | lista | sim se `strength` | ao menos 1 |
+| `home_exercises` | lista | não (só `strength`) | versão em casa da mesma sessão; mesmo formato de `exercises`; ausente, `null` ou vazia = sem versão em casa |
 | `blocks` | lista | sim se `run` | ao menos 1 |
 
 ### `exercises[]`
@@ -53,7 +55,7 @@ Contrato entre a IA (que gera o plano) e o app (que valida e importa). O app **r
 | `target_pace_sec_per_km` | `{min,max}` ou `null` | não | segundos/km, 150 a 900, `min <= max` (`min` = mais rápido); ausente/`null` = sem aviso de pace |
 | `repeat` | inteiro | não | 1 a 100, padrão 1 |
 
-`repeat` repete o bloco isolado (um intervalado `interval`+`recovery` usa o mesmo `repeat` nos dois blocos consecutivos).
+`repeat` repete o bloco isolado. Um bloco repetido seguido de um `recovery` com o mesmo `repeat` é intercalado (`interval`+`recovery` no intervalado, `steady`+`recovery` na corrida/caminhada): corrida, recuperação, corrida...
 
 ## Campos desconhecidos e obrigatórios
 - Desconhecidos: **ignorados com aviso** (`caminho: campo desconhecido, ignorado`).

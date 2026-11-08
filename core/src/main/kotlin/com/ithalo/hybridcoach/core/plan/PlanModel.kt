@@ -31,6 +31,12 @@ sealed interface SessionDef {
     val dayOfWeek: DayOfWeek
     val title: String
     val estimatedMinutes: Int?
+
+    /**
+     * A complementary session (`"optional": true`): bike at home, an extra easy run, a second workout of the day.
+     * Not doing it is not a miss; doing it counts like any session.
+     */
+    val optional: Boolean
 }
 
 data class StrengthSessionDef(
@@ -38,6 +44,9 @@ data class StrengthSessionDef(
     override val title: String,
     override val estimatedMinutes: Int?,
     val exercises: List<ExerciseDef>,
+    /** Optional at-home version of the same workout (`home_exercises`); empty when absent. */
+    val homeExercises: List<ExerciseDef> = emptyList(),
+    override val optional: Boolean = false,
 ) : SessionDef
 
 data class RunSessionDef(
@@ -45,6 +54,7 @@ data class RunSessionDef(
     override val title: String,
     override val estimatedMinutes: Int?,
     val blocks: List<RunBlockDef>,
+    override val optional: Boolean = false,
 ) : SessionDef
 
 data class ExerciseDef(

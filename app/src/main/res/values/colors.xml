@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Bege palette paper/ink (ui/theme/Palette.kt): launcher icon and system splash. -->
+    <color name="ic_launcher_background">#FFD4CCB8</color>
+    <color name="paper_light">#FFD4CCB8</color>
+    <color name="paper_dark">#FF1E1F1B</color>
+</resources>

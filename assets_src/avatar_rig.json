@@ -1,0 +1,22 @@
+{
+  "_doc": "Regiões do desenho em células da grade do sprite (assets_src/avatar_sprite.png), retângulos [x0, y0, x1, y1] inclusivos. Ver tools/avatar/ARTE.md.",
+  "sprite": {
+    "pixel_art": true,
+    "pitch_range": [22.0, 32.0],
+    "fallback_height": 66
+  },
+  "canvas": { "width": 56, "height": 76, "ground": 73, "center_x": 28, "place": [8, 8] },
+  "head": [0, 0, 30, 27],
+  "face": [11, 12, 28, 28],
+  "skin_shade_from_x": 22,
+  "eyes": { "left": [13, 16, 18, 22], "right": [21, 15, 26, 21] },
+  "mouth": [17, 23, 24, 27],
+  "neck": [16, 28, 22, 30],
+  "logo": [16, 32, 27, 36],
+  "shoes": { "left": [2, 58, 15, 65], "right": [24, 58, 38, 65] },
+  "flex_arm": { "seed": [34, 24], "box": [31, 19, 40, 34] },
+  "sparks": [31, 10, 41, 21],
+  "items": {
+    "sticker": { "anchor": "floor", "x": 1, "y": 68 }
+  }
+}

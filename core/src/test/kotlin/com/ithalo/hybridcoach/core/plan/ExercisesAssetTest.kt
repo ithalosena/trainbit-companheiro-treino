@@ -4,7 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.text.Normalizer
+import com.ithalo.hybridcoach.core.exercises.ExerciseCatalog
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -14,8 +14,7 @@ class ExercisesAssetTest {
         checkNotNull(javaClass.classLoader.getResource("exercises.json")).readText(),
     ).jsonObject.getValue("exercises").jsonArray.map { it.jsonObject }
 
-    private fun normalize(s: String) =
-        Normalizer.normalize(s.trim().lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").replace(Regex("\\s+"), " ")
+    private fun normalize(s: String) = ExerciseCatalog.normalize(s)
 
     @Test
     fun `has about sixty exercises`() {
