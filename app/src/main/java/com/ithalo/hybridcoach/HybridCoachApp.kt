@@ -5,8 +5,10 @@ import com.ithalo.hybridcoach.core.avatar.AvatarEvent
 import com.ithalo.hybridcoach.core.avatar.AvatarInput
 import com.ithalo.hybridcoach.core.game.GameState
 import com.ithalo.hybridcoach.data.AppDatabase
+import com.ithalo.hybridcoach.data.BackupManager
 import com.ithalo.hybridcoach.data.GameSnapshot
 import com.ithalo.hybridcoach.data.PlanRepository
+import com.ithalo.hybridcoach.data.MuscleSet
 import com.ithalo.hybridcoach.ui.avatar.AvatarAssets
 import com.ithalo.hybridcoach.ui.avatar.AvatarEvents
 import kotlinx.coroutines.flow.map
@@ -32,6 +34,10 @@ class AppContainer(app: Application) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val repository = PlanRepository(AppDatabase.create(app), app)
     val settings = SettingsRepository(app)
+    val backup = BackupManager(app, repository, settings)
+
+    /** Muscles of every exercise (catalog and created in the app), for the chips on the workout screens. */
+    val muscles: StateFlow<Map<String, MuscleSet>> = repository.observeMuscles().stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
     private val snapshot: StateFlow<GameSnapshot?> = repository.observeGameSnapshot()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
@@ -73,8 +79,12 @@ class HybridCoachApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { container.repository.seedExercises() }
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            container.repository.seedExercises()
+            // A missed session slides to today before the reminders read the dates.
+            runCatching { container.repository.refreshQueue() }
+        }
         // The pet art made by tools/avatar/build.py; until it is in (or if it fails) the art baked in the core is used.
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { AvatarAssets.install(this@HybridCoachApp) }
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { AvatarAssets.install(this@HybridCoachApp, container.settings.current().character) }
     }
 }

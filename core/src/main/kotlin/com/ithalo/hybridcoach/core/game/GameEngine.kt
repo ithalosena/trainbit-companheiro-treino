@@ -12,7 +12,8 @@ import java.util.Locale
  * trophies, items, stats and personal records. Facts dated after [GameFacts.today] are ignored.
  *
  * XP rules (skipped and pending sessions give nothing; sets and runs only count inside done sessions):
- * - done session (strength or run): [XP_SESSION];
+ * - done session (strength or run): [XP_SESSION], or only [XP_SESSION_UNLOGGED] when no set or run was logged
+ *   (marked as done on the session screen without training in the player);
  * - each logged set: [XP_PER_SET];
  * - running: [XP_PER_200M] per full 200 m (5 XP/km);
  * - new personal record (beating an existing best of an exercise; the first log is just the baseline):
@@ -32,6 +33,7 @@ import java.util.Locale
  */
 object GameEngine {
     const val XP_SESSION = 20
+    const val XP_SESSION_UNLOGGED = 5
     const val XP_PER_SET = 1
     const val XP_PER_200M = 1
     const val XP_PR = 5
@@ -115,7 +117,9 @@ object GameEngine {
                     SessionKind.STRENGTH -> p.strengthDone++
                     SessionKind.RUN -> p.runsDone++
                 }
-                xp(day, XP_SESSION, if (s.kind == SessionKind.STRENGTH) "Sessão de força concluída" else "Corrida concluída")
+                val logged = setsBySession[s.sessionId].orEmpty().isNotEmpty() || runsBySession[s.sessionId].orEmpty().isNotEmpty()
+                val sessionLabel = if (s.kind == SessionKind.STRENGTH) "Sessão de força concluída" else "Corrida concluída"
+                if (logged) xp(day, XP_SESSION, sessionLabel) else xp(day, XP_SESSION_UNLOGGED, "$sessionLabel (sem registro)")
                 if (s.rpe == 10) p.rpe10++
                 if (day.dayOfWeek == DayOfWeek.SUNDAY) p.sundays++
                 if ((day.month == Month.DECEMBER && day.dayOfMonth == 25) || (day.month == Month.JANUARY && day.dayOfMonth == 1)) p.holidays++

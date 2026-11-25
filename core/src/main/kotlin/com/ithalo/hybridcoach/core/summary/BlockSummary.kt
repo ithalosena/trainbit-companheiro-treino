@@ -14,7 +14,17 @@ enum class SessionStatus(val value: String) {
     }
 }
 
-data class SessionRecord(val status: SessionStatus, val skipReason: String?)
+/**
+ * [optional]: an extra home session (`"optional": true`), counted apart from the adherence. [daysLate]: days after
+ * its planned date it was done; [reentry]: the comeback applied after a pause (core Reentry code).
+ */
+data class SessionRecord(
+    val status: SessionStatus,
+    val skipReason: String?,
+    val optional: Boolean = false,
+    val daysLate: Int? = null,
+    val reentry: String? = null,
+)
 
 @Serializable
 data class BlockSummary(
@@ -30,12 +40,23 @@ data class BlockSummary(
 @Serializable
 data class Period(val start: String, val end: String)
 
+/**
+ * Adherence to the main sessions; the extra home sessions are a bonus, so they only appear in their own counts
+ * ([extrasPlanned], [extrasDone]) and never lower the adherence.
+ */
 @Serializable
 data class Adherence(
     @SerialName("planned_sessions") val plannedSessions: Int,
     val done: Int,
     val skipped: Int,
     @SerialName("skip_reasons") val skipReasons: List<String>,
+    @SerialName("extras_planned") val extrasPlanned: Int = 0,
+    @SerialName("extras_done") val extrasDone: Int = 0,
+    /** Main sessions done after their planned day (the queue slid them) and the average delay in days. */
+    @SerialName("done_late") val doneLate: Int = 0,
+    @SerialName("avg_days_late") val avgDaysLate: Double? = null,
+    /** Comebacks after a pause that were applied ("short", "medium", "long", "restart"). */
+    val reentries: List<String> = emptyList(),
 )
 
 @Serializable
@@ -134,16 +155,23 @@ object SummaryBuilder {
         userNotes: List<String> = emptyList(),
         runs: List<RunSummary> = emptyList(),
     ): BlockSummary {
-        val skipped = sessions.filter { it.status == SessionStatus.SKIPPED }
+        val main = sessions.filterNot { it.optional }
+        val extras = sessions.filter { it.optional }
+        val skipped = main.filter { it.status == SessionStatus.SKIPPED }
         return fit(
             BlockSummary(
                 planName = planName,
                 period = Period(start.toString(), end.toString()),
                 adherence = Adherence(
-                    plannedSessions = sessions.size,
-                    done = sessions.count { it.status == SessionStatus.DONE },
+                    plannedSessions = main.size,
+                    done = main.count { it.status == SessionStatus.DONE },
                     skipped = skipped.size,
                     skipReasons = skipped.mapNotNull { it.skipReason?.trim()?.takeIf(String::isNotEmpty) }.distinct(),
+                    extrasPlanned = extras.size,
+                    extrasDone = extras.count { it.status == SessionStatus.DONE },
+                    doneLate = main.count { (it.daysLate ?: 0) > 0 },
+                    avgDaysLate = main.mapNotNull { it.daysLate }.filter { it > 0 }.takeIf { it.isNotEmpty() }?.let { Math.round(it.average() * 10) / 10.0 },
+                    reentries = main.mapNotNull { it.reentry?.takeIf { r -> r != "declined" && r != "none" } },
                 ),
                 strength = strength,
                 runs = runs,
@@ -182,6 +210,7 @@ object SummaryBuilder {
         append("Aderência: ${a.done} de ${a.plannedSessions} sessões feitas, ${a.skipped} puladas")
         if (a.skipReasons.isNotEmpty()) append(" (motivos: ${a.skipReasons.joinToString(", ")})")
         appendLine(".")
+        if (a.extrasPlanned > 0) appendLine("Extras em casa (bônus, fora da aderência): ${a.extrasDone} de ${a.extrasPlanned} feitos.")
 
         if (s.strength.isEmpty()) {
             appendLine("Musculação: sem registros.")

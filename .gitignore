@@ -1,6 +1,11 @@
 .gradle/
 build/
 local.properties
+captures/
+.cxx/
+*.apk
+*.aab
+*.log
 .idea/
 *.iml
 .kotlin/
@@ -29,5 +34,14 @@ __pycache__/
 *.pyc
 
 .claude/
+CLAUDE.md
 CLAUDE.local.md
 docs/
+tools/retomar.ps1
+
+*.md
+!/README.md
+!/CREDITS.md
+!app/src/main/assets/*.md
+
+STOP.txt

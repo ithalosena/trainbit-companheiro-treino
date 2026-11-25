@@ -6,7 +6,7 @@ enum class AvatarEvent { TRAIN_STRENGTH, TRAIN_RUN, CELEBRATE, TAP }
 /**
  * Turns time into the [AvatarFrame] to draw. Everything is a pure function of the time except the
  * current mood, the running event and the mood transition, which [setMood] and [play] set.
- * The clock ticks every [TICK_MS] = 200 ms (5 fps); slow clips hold a frame for a few ticks.
+ * The clock ticks every [TICK_MS] = 100 ms (10 fps); slow clips hold a frame for a few ticks.
  *
  * Idle behaviours (a walk around the stage, a muscle pose, a cheer, dozing off when tired) are scheduled by
  * hashing the time bucket, so they look random but are repeatable and testable.
@@ -67,10 +67,10 @@ class AvatarAnimator(mood: AvatarMood = AvatarMood.NORMAL, private val seed: Int
         AvatarMood.SLEEPING -> sleeping(tick)
     }
 
-    /** Every 9-15 s a short behaviour: a walk, a muscle pose or a cheer when awake, dozing off when tired or sluggish. */
+    /** Every 12 s or so a short behaviour: a walk, a muscle pose or a cheer when awake, dozing off when tired or sluggish. */
     private fun behavior(tick: Long): AvatarFrame? {
         val bucket = tick / BEHAVIOR_WINDOW
-        val start = 3 + hash(bucket, 4) % 15 // ends by tick 59 even for the longest behaviour (the walk, 42 ticks)
+        val start = 6 + hash(bucket, 4) % 30 // ends by tick 119 even for the longest behaviour (the walk, 48 ticks)
         val at = tick % BEHAVIOR_WINDOW - start
         if (at < 0) return null
         val pick = hash(bucket, 5) % 4
@@ -113,24 +113,24 @@ class AvatarAnimator(mood: AvatarMood = AvatarMood.NORMAL, private val seed: Int
     }
 
     companion object {
-        const val TICK_MS = 200L
-        private const val BEHAVIOR_WINDOW = 60L
-        private const val POSE_TICKS = 12
-        private const val DOZE_TICKS = 20
-        private const val PAUSE_TICKS = 6
-        private const val BLINK_EVERY = 23L
+        const val TICK_MS = 100L
+        private const val BEHAVIOR_WINDOW = 120L
+        private const val POSE_TICKS = 24
+        private const val DOZE_TICKS = 40
+        private const val PAUSE_TICKS = 12
+        private const val BLINK_EVERY = 46L
 
         // Frame names and timing match the spritesheet made by tools/avatar/build.py (frameMs = hold x TICK_MS).
-        private val IDLE = Clip("idle", 4, 2)
-        private val BLINK = Clip("blink", 4, 2)
+        private val IDLE = Clip("idle", 4, 4)
+        private val BLINK = Clip("blink", 4, 4)
         private val WALK = Clip("walk", 4, 1)
         private val FLEX = Clip("flex", 4, 1)
         private val RUN = Clip("run", 6, 1)
         private val LIFT = Clip("lift", 6, 1)
         private val CHEER = Clip("cheer", 6, 1)
-        private val TIRED = Clip("tired", 4, 2)
-        private val SLUGGISH = Clip("sluggish", 4, 3)
-        private val SLEEP = Clip("sleep", 2, 4)
+        private val TIRED = Clip("tired", 4, 4)
+        private val SLUGGISH = Clip("sluggish", 4, 6)
+        private val SLEEP = Clip("sleep", 2, 8)
 
         private fun sleeping(tick: Long): AvatarFrame {
             val phase = ((tick / SLEEP.hold) % 2).toInt()

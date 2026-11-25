@@ -1,9 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     kotlin("android")
     kotlin("plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+}
+
+// Release signing: keystore.properties (root, not versioned) points to the key outside the repo.
+// Without it the release still builds, unsigned.
+val keystoreProps = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { f ->
+    Properties().apply { f.inputStream().use { load(it) } }
 }
 
 android {
@@ -14,8 +22,25 @@ android {
         applicationId = "com.ithalo.hybridcoach"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "0.14.1"
+        versionCode = 25
+        versionName = "0.17.0"
+    }
+
+    signingConfigs {
+        if (keystoreProps != null) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.findByName("release")
+        }
     }
 
     buildFeatures {
@@ -64,6 +89,10 @@ dependencies {
     // Phase 3: FusedLocationProvider (GPS) and settings storage (see docs/ASSUMPTIONS.md).
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // Migration tests run the migration SQL on a real SQLite built from the exported schemas (no emulator needed).
+    testImplementation(kotlin("test"))
+    testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
 }
 
 ksp {

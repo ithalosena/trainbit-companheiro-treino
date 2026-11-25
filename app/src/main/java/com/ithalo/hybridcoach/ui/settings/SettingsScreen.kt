@@ -52,6 +52,7 @@ import com.ithalo.hybridcoach.data.AppSettings
 import com.ithalo.hybridcoach.data.PlanRepository
 import com.ithalo.hybridcoach.reminders.TrainingReminders
 import com.ithalo.hybridcoach.ui.common.ChoiceChips
+import com.ithalo.hybridcoach.ui.avatar.AvatarAssets
 import com.ithalo.hybridcoach.ui.common.HelpText
 import com.ithalo.hybridcoach.ui.common.IntStepper
 import com.ithalo.hybridcoach.ui.common.LabeledTextField
@@ -99,7 +100,7 @@ class SettingsViewModel(private val repository: PlanRepository, app: Application
 }
 
 /** Sub-pages of the settings menu; MENU is the list itself. */
-private enum class SettingsPage { MENU, APPEARANCE, VOICE, RUN, REMINDERS, DATA }
+private enum class SettingsPage { MENU, APPEARANCE, VOICE, RUN, PROGRESSION, REMINDERS, DATA, ABOUT }
 
 @Composable
 fun SettingsScreen(onBack: (() -> Unit)?, onDesign: () -> Unit) {
@@ -117,7 +118,9 @@ fun SettingsScreen(onBack: (() -> Unit)?, onDesign: () -> Unit) {
         SettingsPage.VOICE -> stringResource(R.string.settings_voice)
         SettingsPage.RUN -> stringResource(R.string.settings_run)
         SettingsPage.REMINDERS -> stringResource(R.string.settings_reminders)
+        SettingsPage.PROGRESSION -> stringResource(R.string.settings_progression)
         SettingsPage.DATA -> stringResource(R.string.settings_data)
+        SettingsPage.ABOUT -> stringResource(R.string.settings_about)
     }
     // As a tab there is no way back from the menu itself; sub-pages always return to the menu.
     ScreenScaffold(title, onBack = if (page == SettingsPage.MENU) onBack else ({ page = SettingsPage.MENU })) {
@@ -128,8 +131,10 @@ fun SettingsScreen(onBack: (() -> Unit)?, onDesign: () -> Unit) {
                         MenuRow("star", stringResource(R.string.settings_appearance), stringResource(R.string.settings_appearance_desc)) { page = SettingsPage.APPEARANCE }
                         MenuRow("speaker", stringResource(R.string.settings_voice), stringResource(R.string.settings_voice_desc)) { page = SettingsPage.VOICE }
                         MenuRow("run", stringResource(R.string.settings_run), stringResource(R.string.settings_run_desc)) { page = SettingsPage.RUN }
+                        MenuRow("chart", stringResource(R.string.settings_progression), stringResource(R.string.settings_progression_desc)) { page = SettingsPage.PROGRESSION }
                         MenuRow("clock", stringResource(R.string.settings_reminders), stringResource(R.string.settings_reminders_desc)) { page = SettingsPage.REMINDERS }
                         MenuRow("folder", stringResource(R.string.settings_data), stringResource(R.string.settings_data_desc)) { page = SettingsPage.DATA }
+                        MenuRow("info", stringResource(R.string.settings_about), stringResource(R.string.settings_about_desc)) { page = SettingsPage.ABOUT }
                         MenuRow("info", stringResource(R.string.settings_tour), stringResource(R.string.settings_tour_desc)) {
                             vm.update { it.copy(onboardingDone = false) }
                         }
@@ -153,6 +158,13 @@ fun SettingsScreen(onBack: (() -> Unit)?, onDesign: () -> Unit) {
                         }
                         SectionTitle(stringResource(R.string.settings_mode))
                         ChoiceChips(DarkMode.entries, s.darkMode, { modeLabel(it) }) { m -> vm.update { it.copy(darkMode = m) } }
+                        SectionTitle(stringResource(R.string.settings_character))
+                        ChoiceChips(AvatarAssets.CHARACTERS, s.character, { characterLabel(it) }) { id ->
+                            vm.update { it.copy(character = id) }
+                            AvatarAssets.select(context.applicationContext, id)
+                        }
+                        SwitchRow(stringResource(R.string.settings_intro), s.introAnimation) { v -> vm.update { it.copy(introAnimation = v) } }
+                        HelpText(stringResource(R.string.settings_intro_help))
                     }
                     SettingsPage.VOICE -> VoicePage(s) { transform -> vm.update(transform) }
                     SettingsPage.RUN -> {
@@ -169,10 +181,14 @@ fun SettingsScreen(onBack: (() -> Unit)?, onDesign: () -> Unit) {
                         SwitchRow(stringResource(R.string.settings_track), s.storeTrack) { v -> vm.update { it.copy(storeTrack = v) } }
                         HelpText(stringResource(R.string.settings_track_help))
                     }
+                    SettingsPage.PROGRESSION -> ProgressionPage(s) { transform -> vm.update(transform) }
                     SettingsPage.REMINDERS -> RemindersPage(s, { transform -> vm.update(transform) }) {
                         vm.refreshReminders(context.applicationContext as Application)
                     }
+                    SettingsPage.ABOUT -> AboutPage()
                     SettingsPage.DATA -> {
+                        BackupSection()
+                        SectionTitle(stringResource(R.string.settings_clear))
                         Text(stringResource(R.string.settings_clear_confirm), style = Retro.type.body, color = Retro.colors.inkSoft)
                         RetroOutlinedButton(onClick = { confirmClear = true }, modifier = Modifier.fillMaxWidth()) {
                             PixelIcon("skull", size = 16.dp)
@@ -201,6 +217,16 @@ fun SettingsScreen(onBack: (() -> Unit)?, onDesign: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun characterLabel(id: String): String = stringResource(
+    when (id) {
+        "cat" -> R.string.character_cat
+        "penguin" -> R.string.character_penguin
+        "ghost" -> R.string.character_ghost
+        else -> R.string.character_boy
+    },
+)
 
 private val RATES = listOf(0.85f, 1f, 1.15f, 1.3f)
 private const val PREVIEW_PHRASE = "Bora! Próximo: agachamento, série 2 de 4. Ritmo ótimo, continue assim."

@@ -45,12 +45,20 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
+import com.ithalo.hybridcoach.ui.retro.RetroLinearProgress
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.width
 
 class HistoryViewModel(repository: PlanRepository) : ViewModel() {
     val exercises: StateFlow<List<ExerciseEntity>?> = repository.observeExercisesWithLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val sessions: StateFlow<List<PlannedSessionEntity>> = repository.observeDoneSessions()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Sets per muscle group since Monday (this week). */
+    val weekVolume: StateFlow<List<Pair<String, Double>>> = repository.observeMuscleVolume(
+        LocalDate.now().with(java.time.DayOfWeek.MONDAY).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(),
+    ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }
 
 class ExerciseHistoryViewModel(repository: PlanRepository, exerciseId: String) : ViewModel() {
@@ -63,11 +71,13 @@ fun HistoryScreen(onBack: () -> Unit, onExercise: (String) -> Unit, onSession: (
     val vm = appViewModel { HistoryViewModel(it) }
     val exercises by vm.exercises.collectAsStateWithLifecycle()
     val sessions by vm.sessions.collectAsStateWithLifecycle()
+    val weekVolume by vm.weekVolume.collectAsStateWithLifecycle()
     var bySession by rememberSaveable { mutableStateOf(true) }
     ScreenScaffold(stringResource(R.string.history_program), onBack) {
         val list = exercises ?: return@ScreenScaffold
         val c = Retro.colors
         ScreenColumn {
+            WeekMuscleVolume(weekVolume)
             ChoiceChips(listOf(true, false), bySession, { stringResource(if (it) R.string.history_by_session else R.string.history_by_exercise) }) { bySession = it }
             if (bySession) {
                 Text(stringResource(R.string.history_sessions_intro), style = Retro.type.body, color = c.inkSoft)
@@ -163,5 +173,26 @@ private fun LoadChart(points: List<Pair<LocalDate, Double>>) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(points.first().first.short(), style = Retro.type.label)
         if (points.size > 1) Text(points.last().first.short(), style = Retro.type.label)
+    }
+}
+
+/** Sets per muscle group this week (main muscles 1, secondary ones half), as bars. */
+@Composable
+private fun WeekMuscleVolume(volume: List<Pair<String, Double>>) {
+    val c = Retro.colors
+    RetroWindow(stringResource(R.string.history_muscles_window), Modifier.fillMaxWidth()) {
+        if (volume.isEmpty()) {
+            Text(stringResource(R.string.history_muscles_empty), style = Retro.type.bodySmall, color = c.inkSoft)
+            return@RetroWindow
+        }
+        val max = volume.first().second
+        volume.forEach { (muscle, sets) ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(muscle, Modifier.width(120.dp), style = Retro.type.bodySmall, color = c.ink)
+                RetroLinearProgress(progress = { (sets / max).toFloat() }, modifier = Modifier.weight(1f), segments = 10, color = c.accent2)
+                Text(formatKg(sets), Modifier.width(36.dp), style = Retro.type.bodySmall, color = c.inkSoft, textAlign = TextAlign.End)
+            }
+        }
+        Text(stringResource(R.string.history_muscles_help), style = Retro.type.label, color = c.inkFaint)
     }
 }

@@ -4,6 +4,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -38,6 +39,18 @@ class PlanValidatorTest {
 
         val broken = PlanValidator.validateText(fixture("valid_min.json").replace("\"exercises\"", home.replace("\"12\"", "12")))
         assertEquals(listOf("weeks[0].sessions[0].home_exercises[0].reps: esperado texto (ex.: \"8\" ou \"6-8\"), veio 12"), broken.errors)
+    }
+
+    @Test
+    fun `exercise_id and custom are optional and typed`() {
+        val ok = PlanValidator.validateText(fixture("valid_full.json").replaceFirst("\"rest_seconds\"", "\"exercise_id\": \"supino-reto-barra\", \"custom\": false, \"rest_seconds\""))
+        assertTrue(ok.isValid, ok.errors.toString())
+        val ex = ok.document!!.weeks.flatMap { it.sessions }.filterIsInstance<StrengthSessionDef>().first().exercises.first()
+        assertEquals("supino-reto-barra", ex.exerciseId)
+        assertFalse(ex.custom)
+        val bad = PlanValidator.validateText(fixture("valid_full.json").replaceFirst("\"rest_seconds\"", "\"custom\": \"sim\", \"rest_seconds\""))
+        assertFalse(bad.isValid)
+        assertTrue(bad.errors.any { it.contains("custom") && it.contains("true ou false") }, bad.errors.toString())
     }
 
     @Test

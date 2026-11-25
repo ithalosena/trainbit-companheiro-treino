@@ -21,21 +21,40 @@ object AvatarAssets {
     private const val TAG = "AvatarAssets"
     private const val DIR = "avatar"
 
+    /** The characters: id to the sheet of its bodies. The boy's sheet also holds the effects and items all of them share. */
+    val CHARACTERS = listOf("boy", "cat", "penguin", "ghost")
+
+    @Volatile private var base: AvatarArtSet? = null
+
     /** True when the asset art was installed. Safe to call from a background thread, once at start-up. */
-    fun install(context: Context): Boolean {
-        val set = runCatching { read(context) }
+    fun install(context: Context, character: String = "boy"): Boolean {
+        base = runCatching { read(context, "spritesheet.png", withExtras = true) }
             .onFailure { Log.w(TAG, "Avatar spritesheet not loaded; using the baked art", it) }
             .getOrNull() ?: return false
+        return select(context, character)
+    }
+
+    /** Switches the pet. The other characters use the boy's effects (the Zs) and items (stickers). */
+    fun select(context: Context, character: String): Boolean {
+        val boy = base ?: return false
+        val set = if (character == "boy" || character !in CHARACTERS) {
+            boy
+        } else {
+            val bodies = runCatching { read(context, "char_$character.png", withExtras = false).bodies }
+                .onFailure { Log.w(TAG, "Character $character not loaded; keeping the current pet", it) }
+                .getOrNull() ?: return false
+            AvatarArtSet(bodies, boy.effects, boy.items)
+        }
         val ok = AvatarSprites.install(set)
-        if (!ok) Log.w(TAG, "Avatar spritesheet does not match the app (frame size or names); using the baked art")
+        if (!ok) Log.w(TAG, "Avatar art does not match the app (frame size or names); keeping the previous art")
         return ok
     }
 
-    private fun read(context: Context): AvatarArtSet {
+    private fun read(context: Context, png: String, withExtras: Boolean): AvatarArtSet {
         val json = JSONObject(context.assets.open("$DIR/spritesheet.json").bufferedReader().use { it.readText() })
-        val bitmap = context.assets.open("$DIR/spritesheet.png").use {
+        val bitmap = context.assets.open("$DIR/$png").use {
             BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inPremultiplied = false; inScaled = false })
-        } ?: error("spritesheet.png could not be decoded")
+        } ?: error("$png could not be decoded")
         try {
             val toneArray = json.getJSONArray("tones")
             val tones = IntArray(toneArray.length()) { android.graphics.Color.parseColor(toneArray.getString(it)) and 0xFFFFFF }
@@ -51,6 +70,7 @@ object AvatarAssets {
                 val row = a.getInt("row")
                 for (f in 0 until a.getInt("frames")) bodies["${prefix}_$f"] = cut(f * w, row * h, w, h)
             }
+            if (!withExtras) return AvatarArtSet(bodies, emptyMap(), emptyMap())
             val effects = HashMap<String, AvatarLayer>()
             json.optJSONObject("effects")?.let { e ->
                 e.keys().forEach { k ->

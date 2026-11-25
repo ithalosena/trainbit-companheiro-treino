@@ -39,7 +39,17 @@ import com.ithalo.hybridcoach.core.plan.PlanValidator
 import com.ithalo.hybridcoach.core.plan.RunSessionDef
 import com.ithalo.hybridcoach.core.plan.StrengthSessionDef
 import com.ithalo.hybridcoach.core.prompt.CorrectionRequest
-import com.ithalo.hybridcoach.data.ExerciseEntity
+import com.ithalo.hybridcoach.core.exercises.CatalogEntry
+import com.ithalo.hybridcoach.core.block.ContinuityReport
+import com.ithalo.hybridcoach.core.block.PlanCheck
+import com.ithalo.hybridcoach.data.SettingsRepository
+import com.ithalo.hybridcoach.HybridCoachApp
+import com.ithalo.hybridcoach.ui.common.appContextViewModel
+import kotlinx.coroutines.flow.first
+import com.ithalo.hybridcoach.core.exercises.Suggestion
+import com.ithalo.hybridcoach.ui.retro.RetroFilterChip
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import com.ithalo.hybridcoach.data.PlanRepository
 import com.ithalo.hybridcoach.data.Resolution
 import com.ithalo.hybridcoach.ui.common.InfoCard
@@ -56,7 +66,6 @@ import com.ithalo.hybridcoach.ui.retro.RetroTextButton
 import com.ithalo.hybridcoach.ui.retro.RetroTextField
 import com.ithalo.hybridcoach.ui.retro.RetroWindow
 import com.ithalo.hybridcoach.ui.theme.Retro
-import com.ithalo.hybridcoach.ui.common.appViewModel
 import com.ithalo.hybridcoach.ui.common.dayLabel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,18 +79,26 @@ data class ImportPreview(
     /** Exercise name as written in the plan -> canonical name, for recognised ones. */
     val matched: Map<String, String>,
     val unrecognized: List<String>,
+    /** The 3 closest catalog exercises of each unrecognised name. */
+    val suggestions: Map<String, List<Suggestion>> = emptyMap(),
+    /** How the plan continues the closed previous block (null when there is none). */
+    val continuity: ContinuityReport? = null,
     val resolutions: Map<String, Resolution> = emptyMap(),
-)
+) {
+    /** Every unrecognised name has a decision (a suggestion, another exercise or a new one with its muscles). */
+    val ready: Boolean get() = unrecognized.all { it in resolutions }
+}
 
 data class ImportState(
     val text: String = "",
     val errors: List<String> = emptyList(),
     val preview: ImportPreview? = null,
-    val exercises: List<ExerciseEntity> = emptyList(),
+    val catalog: List<CatalogEntry> = emptyList(),
+    val muscleGroups: List<String> = emptyList(),
     val saving: Boolean = false,
 )
 
-class ImportViewModel(private val repository: PlanRepository) : ViewModel() {
+class ImportViewModel(private val repository: PlanRepository, private val settings: SettingsRepository) : ViewModel() {
     private val _state = MutableStateFlow(ImportState())
     val state: StateFlow<ImportState> = _state
 
@@ -99,13 +116,30 @@ class ImportViewModel(private val repository: PlanRepository) : ViewModel() {
                         _state.update { it.copy(errors = result.errors, preview = null) }
                     } else {
                         val catalog = repository.catalog()
-                        val names = doc.weeks.flatMap { it.sessions }.filterIsInstance<StrengthSessionDef>().flatMap { it.exercises + it.homeExercises }.map { it.name }.distinct()
-                        val matched = names.mapNotNull { n -> catalog.match(n)?.let { n to it.canonicalName } }.toMap()
+                        val defs = doc.weeks.flatMap { it.sessions }.filterIsInstance<StrengthSessionDef>().flatMap { it.exercises + it.homeExercises }
+                        val names = defs.map { it.name }.distinct()
+                        // Same rule as the import: the id from the prompt's list, then the name (exact, any order, very similar).
+                        val matched = names.mapNotNull { n ->
+                            val byId = defs.filter { it.name == n }.firstNotNullOfOrNull { d -> d.exerciseId?.let { catalog.byId(it) } }
+                            (byId ?: catalog.resolve(n))?.let { n to it.canonicalName }
+                        }.toMap()
+                        val unrecognized = names.filter { n -> n !in matched }
+                        val ids = names.associateWith { n ->
+                            defs.filter { it.name == n }.firstNotNullOfOrNull { d -> d.exerciseId?.let { catalog.byId(it) } }?.id ?: catalog.resolve(n)?.id
+                        }
+                        val continuity = repository.continuityBase()?.let { base ->
+                            PlanCheck.check(doc, base, repository.progressionRules(settings.settings.first().progressionRules)) { ids[it] }
+                        }
                         _state.update {
                             it.copy(
                                 errors = emptyList(),
-                                exercises = repository.exercises(),
-                                preview = ImportPreview(doc, extracted.json.toString(), result.warnings, matched, names.filter { n -> n !in matched }),
+                                catalog = catalog.entries,
+                                muscleGroups = repository.muscleGroups,
+                                preview = ImportPreview(
+                                    doc, extracted.json.toString(), result.warnings, matched, unrecognized,
+                                    suggestions = unrecognized.associateWith { n -> catalog.suggest(n) },
+                                    continuity = continuity,
+                                ),
                             )
                         }
                     }
@@ -131,7 +165,7 @@ class ImportViewModel(private val repository: PlanRepository) : ViewModel() {
 
 @Composable
 fun ImportScreen(onBack: () -> Unit, onImported: () -> Unit) {
-    val vm = appViewModel { ImportViewModel(it) }
+    val vm = appContextViewModel { repo, app -> ImportViewModel(repo, (app as HybridCoachApp).container.settings) }
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -139,6 +173,7 @@ fun ImportScreen(onBack: () -> Unit, onImported: () -> Unit) {
     val context = LocalContext.current
     val copiedMessage = stringResource(R.string.copied)
     var mappingFor by remember { mutableStateOf<String?>(null) }
+    var creatingFor by remember { mutableStateOf<String?>(null) }
 
     val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let {
@@ -195,10 +230,17 @@ fun ImportScreen(onBack: () -> Unit, onImported: () -> Unit) {
             } else {
                 PreviewContent(
                     preview = preview,
+                    catalog = state.catalog,
                     saving = state.saving,
+                    onResolve = vm::resolve,
+                    onCreate = { creatingFor = it },
                     onMap = { mappingFor = it },
                     onConfirm = { vm.confirm(onImported) },
                     onEdit = { vm.onText(state.text) },
+                    onCopyCorrection = { text ->
+                        clipboard.setText(AnnotatedString(text))
+                        scope.launch { snackbar.showSnackbar(copiedMessage) }
+                    },
                 )
             }
         }
@@ -206,10 +248,18 @@ fun ImportScreen(onBack: () -> Unit, onImported: () -> Unit) {
         mappingFor?.let { name ->
             MappingDialog(
                 name = name,
-                exercises = state.exercises,
+                exercises = state.catalog,
                 onPick = { vm.resolve(name, Resolution.MapTo(it)); mappingFor = null },
-                onCreateNew = { vm.resolve(name, Resolution.CreateNew); mappingFor = null },
+                onCreateNew = { creatingFor = name; mappingFor = null },
                 onDismiss = { mappingFor = null },
+            )
+        }
+        creatingFor?.let { name ->
+            CreateExerciseDialog(
+                name = name,
+                groups = state.muscleGroups,
+                onCreate = { muscles -> vm.resolve(name, Resolution.CreateNew(muscles)); creatingFor = null },
+                onDismiss = { creatingFor = null },
             )
         }
     }
@@ -218,10 +268,14 @@ fun ImportScreen(onBack: () -> Unit, onImported: () -> Unit) {
 @Composable
 private fun PreviewContent(
     preview: ImportPreview,
+    catalog: List<CatalogEntry>,
     saving: Boolean,
+    onResolve: (String, Resolution) -> Unit,
+    onCreate: (String) -> Unit,
     onMap: (String) -> Unit,
     onConfirm: () -> Unit,
     onEdit: () -> Unit,
+    onCopyCorrection: (String) -> Unit,
 ) {
     val c = Retro.colors
     val plan = preview.doc.plan
@@ -230,7 +284,11 @@ private fun PreviewContent(
     if (plan.goal.isNotBlank()) Text(plan.goal, style = Retro.type.body)
     InfoCard(stringResource(R.string.import_review_warning), isError = true)
     preview.warnings.forEach { InfoCard(it) }
-    if (preview.unrecognized.isNotEmpty()) InfoCard(stringResource(R.string.import_unrecognized_hint, preview.unrecognized.size))
+    val names = remember(catalog) { catalog.associate { it.id to it.canonicalName } }
+    preview.continuity?.let { ContinuityWindow(it, onCopyCorrection) }
+    if (preview.unrecognized.isNotEmpty()) {
+        UnrecognizedWindow(preview, names, onResolve, onCreate, onMap)
+    }
 
     preview.doc.weeks.forEach { group ->
         val weeks = group.weeks.sorted().joinToString(", ")
@@ -259,12 +317,11 @@ private fun PreviewContent(
                                 Column(Modifier.weight(1f)) {
                                     Text("${e.name} — ${e.sets}×${e.reps}", style = Retro.type.body)
                                     when {
-                                        canonical != null -> Unit
-                                        resolution is Resolution.MapTo -> Text(stringResource(R.string.import_mapped), style = Retro.type.bodySmall, color = c.accent2)
-                                        else -> Text(stringResource(if (resolution == null) R.string.import_not_recognized else R.string.import_will_create), style = Retro.type.bodySmall, color = c.danger)
+                                        canonical != null -> if (canonical != e.name) Text("= $canonical", style = Retro.type.bodySmall, color = c.inkSoft)
+                                        resolution != null -> Text(resolutionText(resolution, names), style = Retro.type.bodySmall, color = c.accent2)
+                                        else -> Text(stringResource(R.string.import_not_recognized), style = Retro.type.bodySmall, color = c.danger)
                                     }
                                 }
-                                if (canonical == null) RetroTextButton(onClick = { onMap(e.name) }) { Text(stringResource(R.string.import_map)) }
                             }
                         }
                         is RunSessionDef -> Text(stringResource(R.string.import_run_blocks, session.blocks.size), style = Retro.type.body)
@@ -274,7 +331,8 @@ private fun PreviewContent(
         }
     }
 
-    RetroButton(onClick = onConfirm, enabled = !saving, modifier = Modifier.fillMaxWidth()) {
+    if (!preview.ready) InfoCard(stringResource(R.string.import_resolve_first), isError = true)
+    RetroButton(onClick = onConfirm, enabled = !saving && preview.ready, modifier = Modifier.fillMaxWidth()) {
         if (saving) HourglassSpinner(size = 20.dp) else PixelIcon("floppy", size = 16.dp)
         Text(stringResource(R.string.import_confirm))
     }
@@ -284,7 +342,7 @@ private fun PreviewContent(
 @Composable
 private fun MappingDialog(
     name: String,
-    exercises: List<ExerciseEntity>,
+    exercises: List<CatalogEntry>,
     onPick: (String) -> Unit,
     onCreateNew: () -> Unit,
     onDismiss: () -> Unit,
@@ -292,7 +350,8 @@ private fun MappingDialog(
     var query by remember { mutableStateOf("") }
     val filtered = remember(query, exercises) {
         val q = ExerciseCatalog.normalize(query)
-        exercises.filter { q.isEmpty() || ExerciseCatalog.normalize(it.canonicalName).contains(q) }
+        exercises.filter { q.isEmpty() || ExerciseCatalog.normalize(it.canonicalName).contains(q) || ExerciseCatalog.normalize(it.nameEn.orEmpty()).contains(q) }
+            .sortedBy { it.autoTranslated }
     }
     RetroDialog(
         onDismissRequest = onDismiss,
@@ -319,4 +378,98 @@ private fun MappingDialog(
         confirmButton = { RetroTextButton(onClick = onCreateNew) { Text(stringResource(R.string.import_map_create)) } },
         dismissButton = { RetroTextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
+}
+
+private fun resolutionText(r: Resolution, names: Map<String, String>): String = when (r) {
+    is Resolution.MapTo -> "→ " + (names[r.exerciseId] ?: r.exerciseId)
+    is Resolution.CreateNew -> "+ novo (" + r.muscles.joinToString(", ") + ")"
+}
+
+/**
+ * The names the app could not match for sure, each with its 3 closest exercises (one tap), "Outro..." (search the
+ * whole catalog) or "Criar novo" (the user picks the muscle groups). Import waits until every one is decided.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun UnrecognizedWindow(
+    preview: ImportPreview,
+    names: Map<String, String>,
+    onResolve: (String, Resolution) -> Unit,
+    onCreate: (String) -> Unit,
+    onMap: (String) -> Unit,
+) {
+    val c = Retro.colors
+    RetroWindow(stringResource(R.string.import_unrecognized_window, preview.unrecognized.size), Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.import_unrecognized_help), style = Retro.type.bodySmall, color = c.inkSoft)
+        preview.unrecognized.forEachIndexed { i, name ->
+            if (i > 0) RetroDivider(dashed = true)
+            val chosen = preview.resolutions[name]
+            Text(name, style = Retro.type.heading)
+            if (chosen != null) Text(resolutionText(chosen, names), style = Retro.type.bodySmall, color = c.accent2)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                preview.suggestions[name].orEmpty().forEach { s ->
+                    RetroFilterChip(
+                        selected = (chosen as? Resolution.MapTo)?.exerciseId == s.entry.id,
+                        onClick = { onResolve(name, Resolution.MapTo(s.entry.id)) },
+                        label = { Text(s.entry.canonicalName) },
+                    )
+                }
+                RetroTextButton(onClick = { onMap(name) }) { Text(stringResource(R.string.import_other)) }
+                RetroTextButton(onClick = { onCreate(name) }) { Text(stringResource(R.string.import_map_create)) }
+            }
+        }
+    }
+}
+
+/** A new exercise needs at least one muscle group, so it shows its muscles and counts in the weekly volume. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CreateExerciseDialog(name: String, groups: List<String>, onCreate: (List<String>) -> Unit, onDismiss: () -> Unit) {
+    var picked by remember { mutableStateOf(emptySet<String>()) }
+    RetroDialog(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.import_create_title),
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.import_create_text, name), style = Retro.type.body)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    groups.forEach { g ->
+                        RetroFilterChip(selected = g in picked, onClick = { picked = if (g in picked) picked - g else picked + g }, label = { Text(g) })
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            RetroButton(onClick = { onCreate(groups.filter { it in picked }) }, enabled = picked.isNotEmpty()) { Text(stringResource(R.string.import_create_confirm)) }
+        },
+        dismissButton = { RetroTextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+
+/**
+ * T6c: the new plan against the closed previous block. Jumps without a justification are warnings, with a ready
+ * message for the AI; justified ones are shown for the record.
+ */
+@Composable
+private fun ContinuityWindow(report: ContinuityReport, onCopy: (String) -> Unit) {
+    val c = Retro.colors
+    RetroWindow(stringResource(R.string.import_continuity_window), Modifier.fillMaxWidth()) {
+        report.mainKeptPct?.let { Text(stringResource(R.string.import_continuity_main, it), style = Retro.type.body) }
+        report.daysKeptPct?.let { Text(stringResource(R.string.import_continuity_days, it), style = Retro.type.body) }
+        if (report.issues.isEmpty()) {
+            Text(stringResource(R.string.import_continuity_ok), style = Retro.type.bodySmall, color = c.success)
+        }
+        report.issues.forEach { issue ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PixelIcon(if (issue.justified) "info" else "warning", tint = if (issue.justified) c.inkSoft else c.danger, size = 16.dp)
+                Text(issue.text, style = Retro.type.bodySmall, color = if (issue.justified) c.inkSoft else c.ink)
+            }
+        }
+        if (report.warnings.isNotEmpty()) {
+            RetroButton(onClick = { onCopy(PlanCheck.correctionRequest(report)) }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.import_continuity_fix))
+            }
+            Text(stringResource(R.string.import_continuity_fix_help), style = Retro.type.label, color = c.inkFaint)
+        }
+    }
 }

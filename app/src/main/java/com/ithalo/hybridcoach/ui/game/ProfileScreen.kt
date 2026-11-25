@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import com.ithalo.hybridcoach.ui.retro.RetroDialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ithalo.hybridcoach.R
+import com.ithalo.hybridcoach.core.avatar.GymCatalog
 import com.ithalo.hybridcoach.core.avatar.AvatarState
 import com.ithalo.hybridcoach.core.game.GameState
 import com.ithalo.hybridcoach.core.game.XpTable
@@ -112,8 +113,8 @@ private fun ProfileSection(state: GameState, avatarState: AvatarState, name: Str
     val c = Retro.colors
     // Character card: the living pet inside corner marks, its tip, name, rank strip, level.
     Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(width = 152.dp, height = 152.dp).cornerMarks(c.ink, gap = 0.dp, arm = 16.dp), contentAlignment = Alignment.Center) {
-            AvatarView(avatarState, state.equipped(stickerItemId)?.id, pixel = 2.5.dp)
+        Box(Modifier.size(width = 204.dp, height = 168.dp).cornerMarks(c.ink, gap = 0.dp, arm = 16.dp), contentAlignment = Alignment.Center) {
+            AvatarView(avatarState, state.equipped(stickerItemId)?.id, pixel = 2.dp, gym = GymCatalog.unlocked(state).map { it.id })
         }
     }
     if (avatarState.tip.isNotBlank()) {

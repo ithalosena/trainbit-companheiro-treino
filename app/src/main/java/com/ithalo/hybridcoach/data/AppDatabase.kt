@@ -1,15 +1,19 @@
 package com.ithalo.hybridcoach.data
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.util.Log
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import java.io.File
 
 @Database(
     entities = [
         PlanEntity::class,
+        BlockSnapshotEntity::class,
         PlannedSessionEntity::class,
         PlannedExerciseEntity::class,
         RunBlockEntity::class,
@@ -24,13 +28,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RunProgressEntity::class,
         RunTrackPointEntity::class,
     ],
-    version = 5,
+    version = AppDatabase.VERSION,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): HybridDao
 
     companion object {
+        const val VERSION = 9
+
         /** Phase 2: strength player. The CREATE statements are copied from the exported schema (schemas/.../2.json). */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -103,9 +109,58 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        fun create(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "hybrid-coach.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        /** Workout state kept in the database: started session, exercise queue, stopwatch (see [MigrationSql.V5_TO_6]). */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MigrationSql.V5_TO_6.forEach(db::execSQL)
+            }
+        }
+
+        /** Muscle groups of exercises created in the app (see [MigrationSql.V6_TO_7]). */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MigrationSql.V6_TO_7.forEach(db::execSQL)
+            }
+        }
+
+        /** Block lifecycle, snapshot and pain per exercise (see [MigrationSql.V7_TO_8]). */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MigrationSql.V7_TO_8.forEach(db::execSQL)
+            }
+        }
+
+        /** Queues per modality: planned date, place in the queue, lateness and comebacks (see [MigrationSql.V8_TO_9]). */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MigrationSql.V8_TO_9.forEach(db::execSQL)
+            }
+        }
+
+        fun create(context: Context): AppDatabase {
+            keepCopyBeforeMigration(context)
+            return Room.databaseBuilder(context, AppDatabase::class.java, BackupManager.DB_NAME)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 .build()
+        }
+
+        /**
+         * Before Room migrates an older database, a copy of it is kept as `files/pre-migration-v<old>.db` (one per
+         * old version, never overwritten). Migrations only add, but this way the data survives even a bad one.
+         */
+        private fun keepCopyBeforeMigration(context: Context) {
+            runCatching {
+                val file = context.getDatabasePath(BackupManager.DB_NAME)
+                if (!file.exists()) return
+                val old = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+                    db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
+                    db.version
+                }
+                if (old in 1 until VERSION) {
+                    val copy = File(context.filesDir, "pre-migration-v$old.db")
+                    if (!copy.exists()) file.copyTo(copy)
+                }
+            }.onFailure { Log.w("AppDatabase", "Could not keep a copy before the migration", it) }
+        }
     }
 }

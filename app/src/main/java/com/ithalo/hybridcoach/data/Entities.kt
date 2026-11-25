@@ -19,6 +19,21 @@ data class PlanEntity(
     val rawJson: String,
     val createdAt: Long,
     val status: String,
+    /** Block number (1, 2, 3...) and the block it follows. */
+    val number: Int = 1,
+    val previousPlanId: Long? = null,
+    /** "base", "progression", "peak" or "deload", as the AI stated it (`plan.phase`). */
+    val phase: String? = null,
+    /** When the user closed the block (its snapshot is then frozen); null while open. */
+    val closedAt: Long? = null,
+)
+
+/** The block frozen when it was closed (core BlockSnapshot as JSON). Written once, never updated. */
+@Entity
+data class BlockSnapshotEntity(
+    @PrimaryKey val planId: Long,
+    val json: String,
+    val createdAt: Long,
 )
 
 @Entity(
@@ -40,6 +55,18 @@ data class PlannedSessionEntity(
     val variant: String = "gym",
     /** Complementary session (`"optional": true` in the plan): not doing it is not a miss. */
     val optional: Boolean = false,
+    /** When the workout was opened for the first time (null: not started). Started and not done shows "Continuar". */
+    val startedAt: Long? = null,
+    /** The date the plan gave it; [date] is where the queue put it now (a missed session slides, see core ModalityQueue). */
+    val plannedDate: String = date,
+    /** Position in its modality's queue (strength or run) within the block, from 1. */
+    val sequence: Int = 0,
+    /** Days after [plannedDate] it was done (0 on time); null while not done. */
+    val daysLate: Int? = null,
+    /** Days since the last done session of its modality when it was started (null: not started, or never trained). */
+    val gapDaysAtStart: Int? = null,
+    /** Comeback after a pause (core Reentry code) the user accepted for this session, or "declined". */
+    val reentryApplied: String? = null,
 )
 
 @Entity(
@@ -66,6 +93,17 @@ data class PlannedExerciseEntity(
     val extraSets: Int = 0,
     /** "gym" or "home": which version of the session this exercise belongs to. */
     val variant: String = "gym",
+    /** Position in this workout's queue (postpone, do now, drag); [orderIndex] keeps the plan's order. */
+    val queueOrder: Int = 0,
+    /** Times it was postponed in the workout, and the last reason given (e.g. "equipamento ocupado"). */
+    val postponeCount: Int = 0,
+    val postponeReason: String? = null,
+    /** Stopwatch of a timed exercise (see core WorkClock): wall-clock start while running, plus the time already done. */
+    val timerStartedAt: Long? = null,
+    val timerAccumulatedMs: Long = 0,
+    /** The user felt pain in this exercise in this workout, with a short note. */
+    val pain: Boolean = false,
+    val painNote: String? = null,
 )
 
 @Entity(
@@ -185,6 +223,8 @@ data class RunLogRow(
 data class ExerciseEntity(
     @PrimaryKey val id: String,
     val canonicalName: String,
+    /** Muscle groups chosen when the exercise was created in the app ("peitoral,tríceps"); catalog exercises take theirs from the catalog. */
+    val muscles: String? = null,
 )
 
 /** [alias] holds the normalized name, so it is also the lookup key. */
@@ -239,6 +279,7 @@ data class StrengthLogRow(
     val plannedSets: Int,
     val plannedReps: String,
     val plannedLoadKg: Double?,
+    val date: String = "",
 )
 
 data class FeedbackRow(

@@ -74,4 +74,15 @@ class QuestionnaireRulesTest {
         assertEquals(QuestionnaireAnswers(), QuestionnaireAnswers.fromJson("{}"))
         assertEquals(QuestionnaireAnswers(), QuestionnaireAnswers.fromJson("""{"availableDays":["mon"],"location":"HOME"}"""))
     }
+
+    @Test
+    fun `extra kinds offer the bike only to who has one`() {
+        assertEquals(listOf(ExtraKind.CORE, ExtraKind.MOBILITY), ok.availableExtraKinds)
+        assertEquals(ExtraKind.entries, ok.copy(hasBike = true).availableExtraKinds)
+        assertEquals(listOf(ExtraKind.CORE, ExtraKind.MOBILITY), ok.copy(extraKinds = listOf(ExtraKind.BIKE)).extraKindsForPlan)
+        assertEquals(listOf(ExtraKind.BIKE), ok.copy(hasBike = true, extraKinds = listOf(ExtraKind.BIKE)).extraKindsForPlan)
+        val a = ok.copy(extraSessions = 2, extraKinds = listOf(ExtraKind.CORE))
+        assertEquals(a, QuestionnaireAnswers.fromJson(a.toJson()))
+        assertEquals(0, QuestionnaireAnswers.fromJson("{}").extraSessions)
+    }
 }

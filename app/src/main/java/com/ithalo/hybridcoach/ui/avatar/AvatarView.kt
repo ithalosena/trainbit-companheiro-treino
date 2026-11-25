@@ -16,8 +16,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -34,13 +32,14 @@ import com.ithalo.hybridcoach.core.avatar.AvatarAnimator
 import com.ithalo.hybridcoach.core.avatar.AvatarEvent
 import com.ithalo.hybridcoach.core.avatar.AvatarInput
 import com.ithalo.hybridcoach.core.avatar.AvatarMood
+import com.ithalo.hybridcoach.core.avatar.AvatarOneBit
+import com.ithalo.hybridcoach.core.avatar.GymScene
 import com.ithalo.hybridcoach.core.avatar.AvatarSprites
 import com.ithalo.hybridcoach.core.avatar.AvatarState
 import com.ithalo.hybridcoach.core.avatar.computeAvatarState
 import com.ithalo.hybridcoach.core.game.ItemCatalog
 import com.ithalo.hybridcoach.ui.common.appContainer
 import com.ithalo.hybridcoach.ui.theme.Retro
-import com.ithalo.hybridcoach.ui.theme.RetroColors
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import java.time.LocalTime
@@ -88,31 +87,15 @@ fun rememberAvatarState(input: AvatarInput?): AvatarState? {
     return remember(input, hour) { input?.let { computeAvatarState(it, hour) } }
 }
 
-/**
- * The art is drawn dark outline, then shade, base and highlight getting lighter. The theme's dark ramp is
- * the opposite (light ink, dark shades), which turned the face into a negative, so in dark mode the pet is
- * drawn on a light "screen" plate with the same dark-to-light order as in light mode.
- */
-private class AvatarTones(val plate: Color?, val tones: Array<Color>)
-
-private fun RetroColors.avatarTones(): AvatarTones =
-    if (!isDark) {
-        AvatarTones(null, arrayOf(Color.Transparent, ink, spriteMid, spriteLight, spriteHighlight))
-    } else {
-        AvatarTones(
-            plate = ink,
-            tones = arrayOf(Color.Transparent, background, spriteLight, spriteHighlight, lerp(ink, Color.White, 0.55f)),
-        )
-    }
-
+/** The pet is drawn in one color, the theme's ink, on whatever is behind it ([AvatarOneBit]). */
 private fun animationsOff(context: android.content.Context): Boolean =
     Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
 
 /**
  * The pet avatar: [state] decides the mood, [stickerId] is the equipped sticker item (on the floor beside it).
- * The stage is wider than the pet so it can walk around. One 5 fps clock ([AvatarAnimator.TICK_MS]) drives it; it only runs while the screen is started, and the frame is read in the draw
+ * The stage is wider than the pet so it can walk around. One 10 fps clock ([AvatarAnimator.TICK_MS]) drives it; it only runs while the screen is started, and the frame is read in the draw
  * phase so a new frame redraws without recomposing. With animations turned off in the system settings it
- * shows the still pose of the mood. [pixel] is dp per art pixel, rounded to whole device pixels.
+ * shows the still pose of the mood. [gym] is the ids of the liberated gym pieces drawn behind the pet. [pixel] is dp per art pixel, rounded to whole device pixels.
  */
 @Composable
 fun AvatarView(
@@ -120,11 +103,13 @@ fun AvatarView(
     stickerId: String?,
     modifier: Modifier = Modifier,
     pixel: Dp = 2.5.dp,
+    gym: List<String>? = null,
 ) {
     val context = LocalContext.current
     val container = appContainer()
-    val colors = Retro.colors
-    val look = remember(colors) { colors.avatarTones() }
+    val ink = Retro.colors.ink
+    // The gym behind the pet (null: no scene, as on the first screens), drawn once per set of liberated pieces.
+    val gymArt = remember(gym) { gym?.let { GymScene.compose(it) } }
     val density = LocalDensity.current
     val animator = remember { AvatarAnimator(state.mood, seed = (System.nanoTime() and 0xFFFF).toInt()) }
     var frame by remember { mutableStateOf(animator.frameAt(SystemClock.elapsedRealtime())) }
@@ -179,8 +164,8 @@ fun AvatarView(
                 }
             },
     ) {
-        look.plate?.let { drawRect(it) }
-        val tones = AvatarSprites.compose(frame, stickerId)
+        val pet = AvatarSprites.compose(frame, stickerId)
+        val tones = if (gymArt != null) GymScene.withPet(pet, gymArt, AvatarSprites.WIDTH) else AvatarOneBit.convert(pet, AvatarSprites.WIDTH)
         val w = AvatarSprites.WIDTH
         val c = cell.toFloat()
         for (y in 0 until AvatarSprites.HEIGHT) {
@@ -190,7 +175,7 @@ fun AvatarView(
                 if (tone == 0) { x++; continue }
                 var end = x + 1
                 while (end < w && tones[y * w + end].toInt() == tone) end++
-                drawRect(look.tones[tone], Offset(x * c, y * c), Size((end - x) * c, c))
+                drawRect(ink, Offset(x * c, y * c), Size((end - x) * c, c))
                 x = end
             }
         }

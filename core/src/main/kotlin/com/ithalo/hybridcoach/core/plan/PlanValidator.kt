@@ -20,6 +20,8 @@ object PlanValidator {
     private const val PACE_MIN = 150
     private const val PACE_MAX = 900
 
+    private val PHASES = listOf("base", "progression", "peak", "deload")
+
     private val DAYS = mapOf(
         "mon" to DayOfWeek.MONDAY, "tue" to DayOfWeek.TUESDAY, "wed" to DayOfWeek.WEDNESDAY,
         "thu" to DayOfWeek.THURSDAY, "fri" to DayOfWeek.FRIDAY, "sat" to DayOfWeek.SATURDAY,
@@ -149,14 +151,16 @@ object PlanValidator {
 
         fun planInfo(o: JsonObject): PlanInfo? {
             val path = "plan"
-            unknownFields(o, setOf("name", "start_date", "duration_weeks", "goal", "notes"), path)
+            unknownFields(o, setOf("name", "start_date", "duration_weeks", "goal", "notes", "phase"), path)
             val name = string(o, "name", path)
             val duration = int(o, "duration_weeks", path, 1..12)
             val date = startDate(o, path)
             val goal = string(o, "goal", path, required = false).orEmpty()
             val notes = string(o, "notes", path, required = false).orEmpty()
+            val phase = string(o, "phase", path, required = false)?.trim()?.lowercase()
+            if (phase != null && phase !in PHASES) error("$path.phase", "esperado um entre ${PHASES.joinToString(", ")}, veio \"$phase\"")
             if (name == null || duration == null || date == null) return null
-            return PlanInfo(name, date, duration, goal, notes)
+            return PlanInfo(name, date, duration, goal, notes, phase?.takeIf { it in PHASES })
         }
 
         fun startDate(o: JsonObject, path: String): LocalDate? {
@@ -273,11 +277,14 @@ object PlanValidator {
         }
 
         /** `optional`: a complementary session. Absent or null is false; anything but true/false is an error. */
-        fun optionalFlag(o: JsonObject, path: String): Boolean {
-            val el = o["optional"]
+        fun optionalFlag(o: JsonObject, path: String): Boolean = flag(o, "optional", path)
+
+        /** An optional true/false field; anything else is an error. */
+        fun flag(o: JsonObject, key: String, path: String): Boolean {
+            val el = o[key]
             if (el == null || el is JsonNull) return false
             val v = (el as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
-            if (v == null) error("$path.optional", "esperado true ou false")
+            if (v == null) error("$path.$key", "esperado true ou false")
             return v == true
         }
 
@@ -301,7 +308,7 @@ object PlanValidator {
         }
 
         fun exercise(o: JsonObject, path: String): ExerciseDef? {
-            unknownFields(o, setOf("name", "sets", "reps", "load_kg", "rest_seconds", "rpe_target", "notes"), path)
+            unknownFields(o, setOf("name", "sets", "reps", "load_kg", "rest_seconds", "rpe_target", "notes", "exercise_id", "custom", "justification"), path)
             val name = string(o, "name", path)
             val sets = int(o, "sets", path, 1..10)
             val reps = repsField(o, path)
@@ -309,9 +316,12 @@ object PlanValidator {
             val rest = int(o, "rest_seconds", path, 0..600)
             val rpe = int(o, "rpe_target", path, 1..10, required = false)
             val notes = string(o, "notes", path, required = false).orEmpty()
+            val exerciseId = string(o, "exercise_id", path, required = false)?.trim()?.takeIf { it.isNotEmpty() }
+            val custom = flag(o, "custom", path)
+            val justification = string(o, "justification", path, required = false)?.trim()?.takeIf { it.isNotEmpty() }
             if (name == null || sets == null || reps == null || rest == null) return null
             if (errorsIn(path)) return null
-            return ExerciseDef(name, sets, reps, load, rest, rpe, notes)
+            return ExerciseDef(name, sets, reps, load, rest, rpe, notes, exerciseId, custom, justification)
         }
 
         /** reps stays a string ("8", "6-8", "AMRAP", "30s"); a bare number is an error, not coerced. */

@@ -44,7 +44,7 @@ interface HybridDao {
     fun observeDoneSessions(): Flow<List<PlannedSessionEntity>>
 
     /** Only the exercises of the version (gym or home) the session is set to. */
-    @Query(EXERCISE_SELECT + "JOIN PlannedSessionEntity s0 ON s0.id = pe.sessionId WHERE pe.sessionId = :sessionId AND pe.variant = s0.variant ORDER BY pe.orderIndex")
+    @Query(EXERCISE_SELECT + "JOIN PlannedSessionEntity s0 ON s0.id = pe.sessionId WHERE pe.sessionId = :sessionId AND pe.variant = s0.variant ORDER BY pe.queueOrder, pe.orderIndex")
     fun observeSessionExercises(sessionId: Long): Flow<List<PlannedExerciseWithName>>
 
     @Query(EXERCISE_SELECT + "JOIN PlannedSessionEntity s0 ON s0.id = pe.sessionId WHERE s0.planId = :planId AND pe.variant = s0.variant ORDER BY s0.date, pe.orderIndex")
@@ -61,6 +61,49 @@ interface HybridDao {
 
     @Query("UPDATE PlannedExerciseEntity SET substituteExerciseId = :exerciseId, substituteReason = :reason WHERE id = :id")
     suspend fun substituteExercise(id: Long, exerciseId: String, reason: String)
+
+    /** First set of each exercise of a plan: the order the exercises were really done in. */
+    @Query(
+        "SELECT l.plannedExerciseId AS id, MIN(l.timestamp) AS firstAt FROM SetLogEntity l " +
+            "JOIN PlannedSessionEntity s ON s.id = l.sessionId WHERE s.planId = :planId GROUP BY l.plannedExerciseId",
+    )
+    suspend fun firstSetTimes(planId: Long): List<FirstSetRow>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertSnapshot(snapshot: BlockSnapshotEntity)
+
+    @Query("SELECT * FROM BlockSnapshotEntity WHERE planId = :planId")
+    suspend fun snapshot(planId: Long): BlockSnapshotEntity?
+
+    @Query("SELECT * FROM BlockSnapshotEntity ORDER BY createdAt DESC LIMIT 1")
+    suspend fun latestSnapshot(): BlockSnapshotEntity?
+
+    @Query("UPDATE PlanEntity SET closedAt = :at WHERE id = :id AND closedAt IS NULL")
+    suspend fun closePlan(id: Long, at: Long)
+
+    @Query("SELECT MAX(number) FROM PlanEntity")
+    suspend fun maxPlanNumber(): Int?
+
+    @Query("SELECT * FROM PlanEntity ORDER BY id DESC LIMIT 1")
+    fun observeLatestPlan(): Flow<PlanEntity?>
+
+    @Query("SELECT * FROM PlanEntity ORDER BY id DESC LIMIT 1")
+    suspend fun latestPlan(): PlanEntity?
+
+    @Query("UPDATE PlannedExerciseEntity SET pain = :pain, painNote = :note WHERE id = :id")
+    suspend fun setPain(id: Long, pain: Boolean, note: String?)
+
+    @Query("UPDATE PlannedSessionEntity SET startedAt = :at WHERE id = :id AND startedAt IS NULL")
+    suspend fun markSessionStarted(id: Long, at: Long)
+
+    @Query("UPDATE PlannedExerciseEntity SET queueOrder = :order WHERE id = :id")
+    suspend fun setQueueOrder(id: Long, order: Int)
+
+    @Query("UPDATE PlannedExerciseEntity SET postponeCount = :count, postponeReason = :reason WHERE id = :id")
+    suspend fun setPostponed(id: Long, count: Int, reason: String?)
+
+    @Query("UPDATE PlannedExerciseEntity SET timerStartedAt = :startedAt, timerAccumulatedMs = :accumulatedMs WHERE id = :id")
+    suspend fun setWorkClock(id: Long, startedAt: Long?, accumulatedMs: Long)
 
     @Query("UPDATE PlannedExerciseEntity SET extraSets = extraSets + 1 WHERE id = :id")
     suspend fun addExtraSet(id: Long)
@@ -118,7 +161,7 @@ interface HybridDao {
     @Query(
         "SELECT l.sessionId AS sessionId, l.exerciseId AS exerciseId, e.canonicalName AS exerciseName, " +
             "l.repsDone AS reps, l.loadKg AS loadKg, l.failed AS failed, l.rpe AS rpe, " +
-            "pe.sets AS plannedSets, pe.reps AS plannedReps, pe.loadKg AS plannedLoadKg " +
+            "pe.sets AS plannedSets, pe.reps AS plannedReps, pe.loadKg AS plannedLoadKg, s.date AS date " +
             "FROM SetLogEntity l " +
             "JOIN PlannedSessionEntity s ON s.id = l.sessionId " +
             "JOIN PlannedExerciseEntity pe ON pe.id = l.plannedExerciseId " +
@@ -148,6 +191,29 @@ interface HybridDao {
 
     @Query("UPDATE PlannedSessionEntity SET status = :status, skipReason = :reason WHERE id = :id")
     suspend fun updateSessionStatus(id: Long, status: String, reason: String?)
+
+    /** Done on [date], [daysLate] after its planned date: it moves to the day it was really done. */
+    @Query("UPDATE PlannedSessionEntity SET status = 'done', skipReason = NULL, date = :date, daysLate = :daysLate WHERE id = :id")
+    suspend fun markCompleted(id: Long, date: String, daysLate: Int)
+
+    @Query("UPDATE PlannedSessionEntity SET status = 'pending', skipReason = NULL, daysLate = NULL WHERE id = :id")
+    suspend fun markSessionPending(id: Long)
+
+    @Query("SELECT * FROM PlannedSessionEntity WHERE id = :id")
+    suspend fun session(id: Long): PlannedSessionEntity?
+
+    @Query("UPDATE PlannedSessionEntity SET gapDaysAtStart = :gap WHERE id = :id AND gapDaysAtStart IS NULL")
+    suspend fun setGapAtStart(id: Long, gap: Int)
+
+    @Query("UPDATE PlannedSessionEntity SET reentryApplied = :code WHERE id = :id")
+    suspend fun setReentry(id: Long, code: String?)
+
+    /** Last day a session of that modality was done in any other block (for the pause before this block). */
+    @Query("SELECT MAX(date) FROM PlannedSessionEntity WHERE status = 'done' AND (type = 'run') = :run AND planId != :planId")
+    suspend fun lastDoneElsewhere(planId: Long, run: Boolean): String?
+
+    @Query("SELECT rb.* FROM RunBlockEntity rb JOIN PlannedSessionEntity s ON s.id = rb.sessionId WHERE s.planId = :planId")
+    suspend fun runBlocksForPlan(planId: Long): List<RunBlockEntity>
 
     // Runs
     @Insert
@@ -204,6 +270,13 @@ interface HybridDao {
 
     @Query("SELECT * FROM ExerciseEntity ORDER BY canonicalName")
     suspend fun exercises(): List<ExerciseEntity>
+
+    @Query("SELECT * FROM ExerciseEntity")
+    fun observeExercises(): Flow<List<ExerciseEntity>>
+
+    /** Exercise of every set logged since [since] (epoch ms), for the weekly volume per muscle. */
+    @Query("SELECT exerciseId FROM SetLogEntity WHERE timestamp >= :since")
+    fun observeSetExercisesSince(since: Long): Flow<List<String>>
 
     @Query("SELECT * FROM ExerciseAliasEntity")
     suspend fun aliases(): List<ExerciseAliasEntity>
@@ -291,3 +364,5 @@ private const val SET_LOG_ROW_SELECT =
         "JOIN ExerciseEntity e ON e.id = l.exerciseId " +
         "LEFT JOIN PlannedExerciseEntity pe ON pe.id = l.plannedExerciseId " +
         "JOIN PlannedSessionEntity s ON s.id = l.sessionId "
+
+data class FirstSetRow(val id: Long, val firstAt: Long)

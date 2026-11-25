@@ -10,6 +10,12 @@ enum class Split { AI, FULL_BODY, UPPER_LOWER, PUSH_PULL_LEGS, ABC }
 enum class Location { FULL_GYM, LIMITED, HOME }
 enum class RunSurface { STREET, TREADMILL }
 
+/**
+ * Complementary sessions, always done at home: the exercise bike (only with [QuestionnaireAnswers.hasBike]),
+ * an abs/core circuit or a stretching/mobility routine.
+ */
+enum class ExtraKind { BIKE, CORE, MOBILITY }
+
 /** NEVER: never ran; WALK_RUN: walks or alternates walking and jogging; REGULAR: already runs. */
 enum class RunExperience { NEVER, WALK_RUN, REGULAR }
 
@@ -67,6 +73,10 @@ data class QuestionnaireAnswers(
     val runSurfaces: List<RunSurface> = listOf(RunSurface.STREET),
     val hasBike: Boolean = false,
     val wantsHomeVersion: Boolean = false,
+    /** Complementary home sessions per week: 0 (none), 1 or 2. */
+    val extraSessions: Int = 0,
+    /** Kinds the user wants; empty lets the AI choose among those available. */
+    val extraKinds: List<ExtraKind> = emptyList(),
     // 6. You and recovery
     val age: String = "",
     val weightKg: String = "",
@@ -93,9 +103,19 @@ data class QuestionnaireAnswers(
     val canHaveHomeVersion: Boolean get() = Location.HOME in locations && locations.any { it != Location.HOME } && strengthDays.isNotEmpty()
     val homeVersion: Boolean get() = wantsHomeVersion && canHaveHomeVersion
 
+    /** Kinds of extra session on offer: the bike only for who has one. */
+    val availableExtraKinds: List<ExtraKind> get() = ExtraKind.entries.filter { it != ExtraKind.BIKE || hasBike }
+
+    /** The kinds that go to the prompt: the chosen ones still available, or all available when none is chosen. */
+    val extraKindsForPlan: List<ExtraKind>
+        get() = extraKinds.filter { it in availableExtraKinds }.ifEmpty { availableExtraKinds }
+
     fun toJson(): String = JSON.encodeToString(serializer(), this)
 
     companion object {
+        /** Most extra home sessions a week the questionnaire offers. */
+        const val MAX_EXTRA_SESSIONS = 2
+
         private val JSON = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
         fun fromJson(text: String): QuestionnaireAnswers = JSON.decodeFromString(serializer(), text)

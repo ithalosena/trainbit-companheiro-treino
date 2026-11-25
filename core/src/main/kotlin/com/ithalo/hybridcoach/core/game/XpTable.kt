@@ -7,6 +7,7 @@ data class XpRule(val label: String, val amount: String)
 object XpTable {
     val rules: List<XpRule> = listOf(
         XpRule("Sessão concluída", "${GameEngine.XP_SESSION}"),
+        XpRule("Sessão marcada sem registrar nada", "${GameEngine.XP_SESSION_UNLOGGED}"),
         XpRule("Cada série registrada", "${GameEngine.XP_PER_SET}"),
         XpRule("Recorde pessoal (força ou corrida)", "${GameEngine.XP_PR}"),
         XpRule("Corrida, por km", "${GameEngine.XP_PER_200M * 5}"),

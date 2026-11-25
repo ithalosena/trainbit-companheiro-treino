@@ -1,6 +1,22 @@
 package com.ithalo.hybridcoach.ui.player
 
 import android.Manifest
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.zIndex
+import com.ithalo.hybridcoach.core.strength.EffortScale
+import com.ithalo.hybridcoach.ui.common.HelpText
+import com.ithalo.hybridcoach.ui.common.MuscleChips
+import kotlin.math.roundToInt
 import com.ithalo.hybridcoach.media.MediaBar
 import android.content.Intent
 import android.net.Uri
@@ -109,6 +125,8 @@ fun PlayerScreen(sessionId: Long, onBack: () -> Unit) {
     }
 
     var dialog by remember { mutableStateOf<PlayerDialog?>(null) }
+    // Which exercise the postpone dialog is for (null: the current one).
+    var postponeIndex by remember { mutableStateOf<Int?>(null) }
     var confetti by remember { mutableIntStateOf(0) }
 
     ScreenScaffold(
@@ -130,10 +148,16 @@ fun PlayerScreen(sessionId: Long, onBack: () -> Unit) {
             RetroLoading()
             return@ScreenScaffold
         }
+        val postponed by vm.postponed.collectAsStateWithLifecycle()
         Column(Modifier.fillMaxSize()) {
+        // The rest countdown stays on top while the page scrolls under it.
+        ui.rest?.takeIf { ui.current != null }?.let { rest ->
+            RestBar(rest, onMinus = { vm.adjustRest(-15) }, onPlus = { vm.adjustRest(15) }, onSkip = vm::skipRest)
+        }
         Box(Modifier.weight(1f).fillMaxWidth()) {
         ScreenColumn {
             if (!ui.voiceAvailable && ui.voiceOn) InfoCard(stringResource(R.string.player_voice_missing))
+            if (ui.current != null) MediaBar()
 
             val current = ui.current
             if (current == null) {
@@ -151,22 +175,20 @@ fun PlayerScreen(sessionId: Long, onBack: () -> Unit) {
                     onUndo = vm::undoLast,
                 )
             } else {
-                ExerciseHeader(
-                    ui, current, onGoTo = vm::goTo,
-                    onRestMinus = { vm.adjustRest(-15) }, onRestPlus = { vm.adjustRest(15) }, onRestSkip = vm::skipRest,
-                )
+                ExerciseHeader(ui, current, onGoTo = vm::goTo, onPostpone = { dialog = PlayerDialog.Postpone })
                 ui.newRecord?.let { rec ->
                     LaunchedEffect(rec.serial) { confetti++ }
                     NewRecordWindow(rec, onDismiss = vm::dismissRecord)
                 }
                 SetInputs(ui, vm)
                 LoggedSets(current)
-                NextExercise(ui, onGoTo = vm::goTo)
+                NextExercise(ui, onGoTo = vm::doNow)
+                QueueWindow(ui, onDoNow = vm::doNow, onPostpone = { i -> postponeIndex = i; dialog = PlayerDialog.Postpone }, onMove = vm::move)
             }
         }
         }
         // The log button stays on screen: it is what is tapped after every set.
-        if (ui.current != null) LogBar(ui, vm)
+        if (ui.current != null) LogBar(ui, vm, postponed)
         }
         PixelConfetti(confetti, Modifier.fillMaxSize(), particleCount = 90)
 
@@ -177,13 +199,30 @@ fun PlayerScreen(sessionId: Long, onBack: () -> Unit) {
                 onSkip = { dialog = PlayerDialog.Skip },
                 onExtraSet = { vm.addExtraSet(); dialog = null },
                 onUndo = { vm.undoLast(); dialog = null },
+                onPain = { dialog = PlayerDialog.Pain },
                 onDismiss = { dialog = null },
             )
+            PlayerDialog.Pain -> ui.current?.let { ex ->
+                PainDialog(
+                    initialNote = ex.planned.painNote.orEmpty(),
+                    onConfirm = { pain, note -> vm.setPain(pain, note); dialog = null },
+                    onDismiss = { dialog = null },
+                )
+            }
             PlayerDialog.Skip -> ReasonDialog(
                 title = stringResource(R.string.player_skip_title),
                 onConfirm = { vm.skipExercise(it); dialog = null },
                 onDismiss = { dialog = null },
             )
+            PlayerDialog.Postpone -> {
+                val index = postponeIndex ?: ui.currentIndex
+                val name = index?.let { ui.exercises.getOrNull(it) }?.item?.exerciseName.orEmpty()
+                PostponeDialog(
+                    exerciseName = name,
+                    onConfirm = { reason -> index?.let { vm.postpone(it, reason) }; postponeIndex = null; dialog = null },
+                    onDismiss = { postponeIndex = null; dialog = null },
+                )
+            }
             PlayerDialog.Substitute -> SubstituteDialog(
                 exercises = ui.catalog,
                 onConfirm = { id, reason -> vm.substitute(id, reason); dialog = null },
@@ -194,7 +233,7 @@ fun PlayerScreen(sessionId: Long, onBack: () -> Unit) {
     }
 }
 
-private enum class PlayerDialog { More, Skip, Substitute }
+private enum class PlayerDialog { More, Skip, Substitute, Postpone, Pain }
 
 /** "⋯" menu of the player: the occasional exercise actions, each with a one-line explanation. */
 @Composable
@@ -204,6 +243,7 @@ private fun MoreDialog(
     onSkip: () -> Unit,
     onExtraSet: () -> Unit,
     onUndo: () -> Unit,
+    onPain: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     RetroDialog(
@@ -218,6 +258,8 @@ private fun MoreDialog(
                 MenuItem("plus", stringResource(R.string.player_extra_set), stringResource(R.string.player_more_extra_desc), onClick = onExtraSet)
                 RetroDivider(dashed = true)
                 MenuItem("x", stringResource(R.string.player_undo), stringResource(R.string.player_more_undo_desc), enabled = canUndo, onClick = onUndo)
+                RetroDivider(dashed = true)
+                MenuItem("heart", stringResource(R.string.player_pain), stringResource(R.string.player_more_pain_desc), onClick = onPain)
             }
         },
         confirmButton = { RetroOutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
@@ -250,23 +292,18 @@ private fun ExerciseHeader(
     ui: PlayerUi,
     current: PlayerExercise,
     onGoTo: (Int) -> Unit,
-    onRestMinus: () -> Unit,
-    onRestPlus: () -> Unit,
-    onRestSkip: () -> Unit,
+    onPostpone: () -> Unit,
 ) {
     val c = Retro.colors
     val index = ui.currentIndex ?: 0
     val total = ui.exercises.size
     val p = current.planned
     val timed = TimedTarget.isTimed(p.reps)
-    // Hero: the rest countdown while resting; otherwise the barbell (or an hourglass for timed work),
-    // scaled down on narrow screens.
-    val rest = ui.rest
+    // Hero: the exercise photo, or the barbell (an hourglass for timed work), scaled down on narrow screens.
+    // The rest countdown is the fixed bar on top of the screen.
     val context = LocalContext.current
     val photoId = current.item.effectiveExerciseId
-    if (rest != null) {
-        RestHero(rest, onRestMinus, onRestPlus, onRestSkip)
-    } else if (photoId in remember { ExercisePhotos.ids(context) }) {
+    if (photoId in remember { ExercisePhotos.ids(context) }) {
         // The exercise itself, start and end of the movement, instead of the generic barbell.
         ExercisePhoto(photoId, current.item.exerciseName, Modifier.fillMaxWidth())
     } else {
@@ -299,7 +336,17 @@ private fun ExerciseHeader(
         if (current.substituted) {
             Text(stringResource(R.string.player_substituted, current.item.originalName), style = Retro.type.bodySmall, color = c.inkSoft)
         }
-        WatchExecutionLink(current.item.exerciseName)
+        MuscleChips(current.item.effectiveExerciseId)
+        if (p.pain) {
+            Text(stringResource(R.string.player_pain_marked, p.painNote.orEmpty()).trimEnd(' ', ':'), style = Retro.type.bodySmall, color = c.danger)
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            WatchExecutionLink(current.item.exerciseName)
+            // Equipment taken: do it later without losing what was done.
+            if (ui.exercises.count { !it.progress.isComplete } > 1) {
+                RetroTextButton(onClick = onPostpone) { Text(stringResource(R.string.player_postpone)) }
+            }
+        }
         // Remaining sets as "lives" (only while they fit on one line).
         if (current.totalSets in 1..10) {
             HeartMeter(current = current.totalSets - current.logs.size, max = current.totalSets, size = 18.dp)
@@ -346,29 +393,35 @@ private fun previousOpen(ui: PlayerUi, from: Int): Int =
 private fun nextOpen(ui: PlayerUi, from: Int): Int =
     (from + 1 until ui.exercises.size).firstOrNull { !ui.exercises[it].progress.isComplete } ?: from
 
-/** The rest countdown, shown where the barbell is: big time, segmented bar, -15 s / +15 s / skip. */
+/**
+ * The rest countdown, fixed on top of the player while the page scrolls: time, segmented bar and
+ * -15 s / +15 s / skip, on one compact block.
+ */
 @Composable
-private fun RestHero(rest: RestUi, onMinus: () -> Unit, onPlus: () -> Unit, onSkip: () -> Unit) {
+private fun RestBar(rest: RestUi, onMinus: () -> Unit, onPlus: () -> Unit, onSkip: () -> Unit) {
     val c = Retro.colors
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            HourglassSpinner(size = 40.dp, tint = c.accent2)
+    Column(
+        Modifier.fillMaxWidth().background(c.windowInset).padding(horizontal = 24.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            HourglassSpinner(size = 24.dp, tint = c.accent2)
             Text(
                 "%d:%02d".format(rest.remaining / 60, rest.remaining % 60),
-                Modifier.padding(start = 16.dp),
-                style = Retro.type.display.copy(fontSize = 44.sp, lineHeight = 52.sp),
+                style = Retro.type.display.copy(fontSize = 30.sp, lineHeight = 36.sp),
                 color = if (rest.remaining <= 3) c.accent else c.ink,
             )
+            RetroLinearProgress(
+                progress = { rest.remaining / rest.total.coerceAtLeast(1).toFloat() },
+                modifier = Modifier.weight(1f),
+                segments = 12,
+                color = c.accent2,
+            )
         }
-        RetroLinearProgress(
-            progress = { rest.remaining / rest.total.coerceAtLeast(1).toFloat() },
-            segments = 20,
-            color = c.accent2,
-        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            RetroOutlinedButton(onClick = onMinus, modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 52.dp)) { Text("-15 s") }
-            RetroOutlinedButton(onClick = onPlus, modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 52.dp)) { Text("+15 s") }
-            RetroButton(onClick = onSkip, modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 52.dp)) { Text(stringResource(R.string.player_skip_rest)) }
+            RetroOutlinedButton(onClick = onMinus, modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp)) { Text("-15 s") }
+            RetroOutlinedButton(onClick = onPlus, modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp)) { Text("+15 s") }
+            RetroButton(onClick = onSkip, modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp)) { Text(stringResource(R.string.player_skip_rest)) }
         }
     }
 }
@@ -405,16 +458,18 @@ private fun SetInputs(ui: PlayerUi, vm: PlayerViewModel) {
         Text(stringResource(R.string.player_ask_load), style = Retro.type.bodySmall, color = c.danger)
     }
     SwitchRow(stringResource(R.string.player_failed), inputs.failed, vm::onFailed)
-    Text(stringResource(R.string.player_rpe_optional), style = Retro.type.label, color = c.inkSoft)
-    RpeGrid(inputs.rpe) { value -> vm.onRpe(if (inputs.rpe == value) null else value) }
 }
 
-/** Fixed bottom bar of the player: the record to beat and the button that logs the set. */
+/**
+ * Fixed bottom bar of the player: the record to beat, the effort of the set (10-segment bar, 0 = not logged)
+ * and the button that logs the set. A just-postponed exercise shows its "Desfazer" here.
+ */
 @Composable
-private fun LogBar(ui: PlayerUi, vm: PlayerViewModel) {
-    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        MediaBar()
+private fun LogBar(ui: PlayerUi, vm: PlayerViewModel, postponed: PostponedUi?) {
+    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        postponed?.let { PostponedLine(it, onUndo = vm::undoPostpone, onDismiss = vm::dismissPostponed) }
         RecordLine(ui.record)
+        EffortBar(EffortScale.position(ui.inputs.rpe), onChange = { vm.onRpe(EffortScale.stored(it)) })
         RetroRewardButton(
             stringResource(R.string.player_log_set).uppercase(PT_BR),
             stringResource(R.string.game_xp_plus, GameEngine.XP_PER_SET),
@@ -470,22 +525,58 @@ private fun NewRecordWindow(rec: NewRecordUi, onDismiss: () -> Unit) {
     }
 }
 
-/** RPE 1–10 as an even 5 × 2 grid of equal cells. */
+/**
+ * Effort on a 10-segment bar with "<" and ">" at the ends; a segment can also be tapped. [value] 0 reads
+ * "não registrado" (only when [min] is 0). Touch targets are 48 dp.
+ */
 @Composable
-private fun RpeGrid(selected: Int?, onSelect: (Int) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(1..5, 6..10).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { value ->
-                    RetroFilterChip(
-                        selected = selected == value,
-                        onClick = { onSelect(value) },
-                        label = { Text(value.toString()) },
-                        modifier = Modifier.weight(1f),
-                    )
+private fun EffortBar(value: Int, onChange: (Int) -> Unit, min: Int = 0) {
+    val c = Retro.colors
+    val label = if (value == 0) stringResource(R.string.player_effort_none) else stringResource(R.string.player_effort_value, value)
+    Column(Modifier.fillMaxWidth().semantics(mergeDescendants = false) { stateDescription = label }) {
+        Text(label, style = Retro.type.label, color = if (value == 0) c.inkSoft else c.ink)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            RetroIconButton(onClick = { onChange((value - 1).coerceAtLeast(min)) }, enabled = value > min) {
+                PixelIcon("arrow_left", size = 16.dp, contentDescription = stringResource(R.string.player_effort_less))
+            }
+            Row(Modifier.weight(1f).height(48.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                for (i in 1..EffortScale.MAX) {
+                    val on = i <= value
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable(onClickLabel = stringResource(R.string.player_effort_value, i)) { onChange(maxOf(i, min)) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(22.dp)
+                                .background(if (on) c.reward else c.windowInset)
+                                .border(1.dp, if (on) c.ink else c.inkFaint),
+                        )
+                    }
                 }
             }
+            RetroIconButton(onClick = { onChange((value + 1).coerceAtMost(EffortScale.MAX)) }, enabled = value < EffortScale.MAX) {
+                PixelIcon("arrow_right", size = 16.dp, contentDescription = stringResource(R.string.player_effort_more))
+            }
         }
+    }
+}
+
+/** "Supino adiado · Desfazer", for a few seconds after postponing. */
+@Composable
+private fun PostponedLine(p: PostponedUi, onUndo: () -> Unit, onDismiss: () -> Unit) {
+    val c = Retro.colors
+    LaunchedEffect(p) {
+        kotlinx.coroutines.delay(6000)
+        onDismiss()
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.player_postponed, p.exerciseName), Modifier.weight(1f), style = Retro.type.bodySmall, color = c.inkSoft, maxLines = 2)
+        RetroTextButton(onClick = onUndo) { Text(stringResource(R.string.player_undo_short)) }
     }
 }
 
@@ -538,11 +629,13 @@ private fun WorkTimerCard(timer: WorkTimerUi, onStart: () -> Unit, onPause: () -
 @Composable
 private fun LoggedSets(current: PlayerExercise) {
     if (current.logs.isEmpty()) return
-    SectionTitle(stringResource(R.string.player_logged))
-    current.logs.forEach { log ->
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PixelIcon(if (log.failed) "x" else "check", tint = if (log.failed) Retro.colors.danger else Retro.colors.success, size = 16.dp)
-            Text(setLine(log, current.planned.reps), style = Retro.type.body)
+    // A window, so the title and its rows always show together.
+    RetroWindow(stringResource(R.string.player_logged), Modifier.fillMaxWidth()) {
+        current.logs.forEach { log ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PixelIcon(if (log.failed) "x" else "check", tint = if (log.failed) Retro.colors.danger else Retro.colors.success, size = 16.dp)
+                Text(setLine(log, current.planned.reps), style = Retro.type.body)
+            }
         }
     }
 }
@@ -637,7 +730,7 @@ private fun FinishPanel(
     summary.avgRpe?.let {
         Text(stringResource(R.string.player_effort_avg, String.format(PT_BR, "%.1f", it)), style = Retro.type.bodySmall, color = c.inkSoft)
     }
-    RpeGrid(rpe) { rpe = it }
+    EffortBar(rpe, onChange = { rpe = it }, min = 1)
     LabeledTextField(stringResource(R.string.player_note), note, { note = it }, singleLine = false)
     RetroButton(onClick = { onFinish(rpe, note) }, modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)) {
         PixelIcon("floppy", size = 18.dp)
@@ -757,3 +850,112 @@ private fun SubstituteDialog(exercises: List<ExerciseEntity>, onConfirm: (String
 }
 
 fun formatKg(v: Double): String = if (v == v.toLong().toDouble()) v.toLong().toString() else "%.1f".format(java.util.Locale.ROOT, v)
+
+/**
+ * The workout queue, in the order the exercises will be done: drag the handle to reorder, "Fazer agora" on any
+ * open exercise, "Adiar" on the current one. Only this workout changes; the plan keeps its order.
+ */
+@Composable
+private fun QueueWindow(ui: PlayerUi, onDoNow: (Int) -> Unit, onPostpone: (Int) -> Unit, onMove: (Int, Int) -> Unit) {
+    val c = Retro.colors
+    if (ui.exercises.size < 2) return
+    var dragging by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val heights = remember { mutableStateMapOf<Int, Int>() }
+    RetroWindow(stringResource(R.string.player_queue_window), Modifier.fillMaxWidth()) {
+        HelpText(stringResource(R.string.player_queue_help))
+        ui.exercises.forEachIndexed { i, ex ->
+            if (i > 0) RetroDivider(dashed = true)
+            val done = ex.progress.isComplete
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { heights[i] = it.height }
+                    .zIndex(if (dragging == i) 1f else 0f)
+                    .graphicsLayer { translationY = if (dragging == i) dragOffset else 0f }
+                    .background(if (dragging == i) c.windowInset else Color.Transparent),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .pointerInput(i, ui.exercises.size) {
+                            detectDragGestures(
+                                onDragStart = { dragging = i; dragOffset = 0f },
+                                onDrag = { change, amount -> change.consume(); dragOffset += amount.y },
+                                onDragEnd = {
+                                    val h = (heights[i] ?: 1).coerceAtLeast(1)
+                                    val to = (i + (dragOffset / h).roundToInt()).coerceIn(0, ui.exercises.size - 1)
+                                    dragging = null
+                                    dragOffset = 0f
+                                    onMove(i, to)
+                                },
+                                onDragCancel = { dragging = null; dragOffset = 0f },
+                            )
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PixelIcon("list", tint = c.inkSoft, size = 18.dp, contentDescription = stringResource(R.string.player_queue_drag))
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(ex.item.exerciseName, style = Retro.type.body, color = if (done) c.inkFaint else c.ink)
+                    val status = buildList {
+                        add(stringResource(R.string.player_queue_sets, ex.logs.size, ex.totalSets))
+                        if (ex.skipped) add(stringResource(R.string.player_queue_skipped))
+                        if (ex.planned.postponeCount > 0) add(stringResource(R.string.player_queue_postponed))
+                    }.joinToString(" · ")
+                    Text(status, style = Retro.type.bodySmall, color = c.inkSoft)
+                }
+                when {
+                    done -> PixelIcon(if (ex.skipped) "x" else "check", tint = if (ex.skipped) c.inkFaint else c.success, size = 16.dp)
+                    i == ui.currentIndex -> RetroTextButton(onClick = { onPostpone(i) }) { Text(stringResource(R.string.player_postpone)) }
+                    else -> RetroTextButton(onClick = { onDoNow(i) }) { Text(stringResource(R.string.player_do_now)) }
+                }
+            }
+        }
+    }
+}
+
+/** "Adiar exercício": optional reason, with "equipamento ocupado" one tap away. */
+@Composable
+private fun PostponeDialog(exerciseName: String, onConfirm: (String?) -> Unit, onDismiss: () -> Unit) {
+    val busy = stringResource(R.string.player_postpone_busy)
+    var reason by remember { mutableStateOf(busy) }
+    RetroDialog(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.player_postpone_title),
+        icon = RetroIconKind.QUESTION,
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.player_postpone_text, exerciseName), style = Retro.type.body)
+                RetroFilterChip(selected = reason == busy, onClick = { reason = if (reason == busy) "" else busy }, label = { Text(busy) })
+                LabeledTextField(stringResource(R.string.player_postpone_reason), reason, { reason = it })
+            }
+        },
+        confirmButton = { RetroButton(onClick = { onConfirm(reason.trim().ifEmpty { null }) }) { Text(stringResource(R.string.player_postpone)) } },
+        dismissButton = { RetroOutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+
+/** "Senti dor": yes or no and a short note; it goes to the block summary and the next block's prompt. */
+@Composable
+private fun PainDialog(initialNote: String, onConfirm: (Boolean, String) -> Unit, onDismiss: () -> Unit) {
+    // Opened from "Senti dor": yes by default; unmarking is one tap.
+    var pain by remember { mutableStateOf(true) }
+    var note by remember { mutableStateOf(initialNote) }
+    RetroDialog(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.player_pain),
+        icon = RetroIconKind.WARNING,
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SwitchRow(stringResource(R.string.player_pain_switch), pain) { pain = it }
+                LabeledTextField(stringResource(R.string.player_pain_note), note, { note = it })
+                Text(stringResource(R.string.player_pain_help), style = Retro.type.bodySmall, color = Retro.colors.inkSoft)
+            }
+        },
+        confirmButton = { RetroButton(onClick = { onConfirm(pain, note) }) { Text(stringResource(R.string.action_confirm)) } },
+        dismissButton = { RetroOutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}

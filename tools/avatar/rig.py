@@ -495,11 +495,11 @@ def dumbbell(c, cx, cy, wob=0):
 ANIMATIONS = [
     ("idle", "idle", "idle", 4, 400),
     ("blink", "blink", "blink", 4, 400),  # shown one tick at a time, in the phase of idle
-    ("walk", "walk", "walk", 4, 200),
-    ("flex", "flex", "flex", 4, 200),
-    ("train_run", "run", "run", 6, 200),
-    ("train_strength", "lift", "lift", 6, 200),
-    ("celebrate", "cheer", "celebrate", 6, 200),
+    ("walk", "walk", "walk", 4, 100),
+    ("flex", "flex", "flex", 4, 100),
+    ("train_run", "run", "run", 6, 100),
+    ("train_strength", "lift", "lift", 6, 100),
+    ("celebrate", "cheer", "celebrate", 6, 100),
     ("tired", "tired", "tired", 4, 400),
     ("sluggish", "sluggish", "sluggish", 4, 600),
     ("sleeping", "sleep", "sleep", 2, 800),

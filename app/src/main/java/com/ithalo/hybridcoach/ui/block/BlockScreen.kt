@@ -15,7 +15,7 @@ import com.ithalo.hybridcoach.ui.theme.Retro
  * highlighted), then follow-up tools. Opened from the Plano tab.
  */
 @Composable
-fun BlockScreen(onBack: () -> Unit, onQuestionnaire: () -> Unit, onPrompt: () -> Unit, onImport: () -> Unit, onExport: () -> Unit, onHistory: () -> Unit) {
+fun BlockScreen(onBack: () -> Unit, onQuestionnaire: () -> Unit, onPrompt: () -> Unit, onImport: () -> Unit, onExport: () -> Unit, onHistory: () -> Unit, onCloseBlock: () -> Unit) {
     ScreenScaffold(stringResource(R.string.program_block), onBack) {
         ScreenColumn {
             Text(stringResource(R.string.block_intro), style = Retro.type.body, color = Retro.colors.inkSoft)
@@ -26,6 +26,7 @@ fun BlockScreen(onBack: () -> Unit, onQuestionnaire: () -> Unit, onPrompt: () ->
             MenuRow("floppy", stringResource(R.string.block_import), stringResource(R.string.block_import_desc), step = 3, onClick = onImport)
 
             SectionTitle(stringResource(R.string.block_group_track))
+            MenuRow("medal", stringResource(R.string.block_close), stringResource(R.string.block_close_desc), onClick = onCloseBlock)
             MenuRow("folder", stringResource(R.string.block_export), stringResource(R.string.block_export_desc), onClick = onExport)
             MenuRow("chart", stringResource(R.string.block_history), stringResource(R.string.block_history_desc), onClick = onHistory)
 

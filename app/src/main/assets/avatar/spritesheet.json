@@ -28,35 +28,35 @@
    "frame": "walk",
    "row": 2,
    "frames": 4,
-   "frameMs": 200
+   "frameMs": 100
   },
   {
    "name": "flex",
    "frame": "flex",
    "row": 3,
    "frames": 4,
-   "frameMs": 200
+   "frameMs": 100
   },
   {
    "name": "train_run",
    "frame": "run",
    "row": 4,
    "frames": 6,
-   "frameMs": 200
+   "frameMs": 100
   },
   {
    "name": "train_strength",
    "frame": "lift",
    "row": 5,
    "frames": 6,
-   "frameMs": 200
+   "frameMs": 100
   },
   {
    "name": "celebrate",
    "frame": "cheer",
    "row": 6,
    "frames": 6,
-   "frameMs": 200
+   "frameMs": 100
   },
   {
    "name": "tired",

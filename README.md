@@ -24,7 +24,7 @@ Os dois podem ficar instalados juntos. O debug mantém o id original de propósi
 - [SPEC.md](SPEC.md): especificação por fases.
 - [schema/schema_v1.md](schema/schema_v1.md): formato do JSON do plano (contrato entre a IA e o app).
 - [tools/avatar/](tools/avatar/README.md): pipeline do sprite do bichinho e [como trocar a arte](tools/avatar/ARTE.md).
-- `tools/exercises/`: script que gera as fotos dos exercícios em pixel (free-exercise-db, domínio público).
+- `tools/exercises/`: scripts do catálogo de exercícios com músculos e das fotos em pixel (free-exercise-db, domínio público). Créditos em [CREDITS.md](CREDITS.md).
 
 A pasta `docs/` guarda só anotações de trabalho (decisões, progresso, backlog, roadmap, prompts) e fica fora do repositório (ver `.gitignore`).
 
@@ -47,6 +47,9 @@ A pasta `docs/` guarda só anotações de trabalho (decisões, progresso, backlo
 - 0.13.0: lembretes de treino (Ajustes > Lembretes: horário da academia e da corrida, aviso na hora ou 15/30/60 min antes, alarme exato quando o Android deixa, volta depois de reiniciar); pipeline do avatar em tools/avatar (build.py gera o spritesheet que o app carrega, com a arte embutida como reserva), bichinho piscando e bocejando, relógio a 5 fps.
 - 0.14.0: controle de música no player e na corrida; próximo exercício no fim do player; treino complementar (`"optional": true`, cartão "Extra", banco v5); fotos dos exercícios em pixel animadas (free-exercise-db, 60 exercícios); pontuação do Perfil numa janela ("Ver pontuação").
 - 0.14.1: tira o leitor de notificações (nome da música), que fazia o Play Protect bloquear a instalação; a barra de música fica com tocar/pausar, próxima e "música tocando".
+- 0.15.0: treinos extras em casa pedidos no questionário (nenhum, 1 ou 2 por semana; bike, abdominais ou alongamento); o prompt só deixa a IA colocar extras quando pedido e explica como montar cada tipo; o resumo do bloco conta a aderência só das sessões principais e os extras à parte; a Hoje aponta o próximo treino principal.
+- 0.16.0: tela de treino com estado salvo (continuar, cronômetro por tempo, fila, "senti dor"), catálogo de 877 exercícios com músculos, fechar o bloco com partida do próximo, bichinho em 1-bit a 10 fps com gato, pinguim e fantasma, academia do bichinho no Perfil, backup e restauração, tela Sobre, volume da voz também no treino, "Concluir" sem registro dá 5 XP.
+- 0.17.0: filas separadas de musculação e corrida (treino perdido continua sendo o próximo e as seguintes andam juntas), bloco por quantidade de sessões com progresso por modalidade e teto de 1,5 vez a duração, retomada proposta depois de pausa, "Pular de vez" com motivo, modo prova; banco v9.
 
 ## Como compilar e testar
 Requer JDK 17+ (testado com 21) e o Android SDK (plataforma 35). Crie `local.properties` com `sdk.dir=C:/caminho/do/Android/Sdk` (o arquivo não é versionado).

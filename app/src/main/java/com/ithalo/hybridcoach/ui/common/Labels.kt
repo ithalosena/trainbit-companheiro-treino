@@ -178,6 +178,11 @@ fun SessionCard(session: PlannedSessionEntity, showDate: Boolean, onClick: () ->
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(session.title, style = Retro.type.heading, color = if (skipped) c.inkSoft else c.ink)
                 val details = buildList {
+                    if (session.status == "pending" && session.startedAt != null) add(stringResource(R.string.session_in_progress))
+                    // Slid by the queue after a miss: said plainly, without blame.
+                    if (session.status == "pending" && session.plannedDate.isNotBlank() && session.plannedDate < session.date) {
+                        add(stringResource(R.string.session_late, LocalDate.parse(session.plannedDate).short()))
+                    }
                     if (session.optional) add(stringResource(R.string.session_optional))
                     add(typeLabel(session.type))
                     if (showDate) add(date.long())

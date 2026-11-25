@@ -29,6 +29,10 @@ import com.ithalo.hybridcoach.core.questionnaire.IssueSeverity
 import com.ithalo.hybridcoach.core.questionnaire.QuestionnaireIssue
 import com.ithalo.hybridcoach.core.questionnaire.QuestionnaireRules
 import com.ithalo.hybridcoach.data.PlanRepository
+import com.ithalo.hybridcoach.data.SettingsRepository
+import com.ithalo.hybridcoach.HybridCoachApp
+import com.ithalo.hybridcoach.ui.common.appContextViewModel
+import kotlinx.coroutines.flow.first
 import com.ithalo.hybridcoach.ui.common.InfoCard
 import com.ithalo.hybridcoach.ui.common.ScreenColumn
 import com.ithalo.hybridcoach.ui.common.ScreenScaffold
@@ -53,7 +57,7 @@ sealed interface PromptState {
     data class Ready(val prompt: String, val issues: List<QuestionnaireIssue>) : PromptState
 }
 
-class PromptViewModel(repository: PlanRepository) : ViewModel() {
+class PromptViewModel(repository: PlanRepository, settings: SettingsRepository) : ViewModel() {
     private val _state = MutableStateFlow<PromptState>(PromptState.Loading)
     val state: StateFlow<PromptState> = _state
 
@@ -63,8 +67,11 @@ class PromptViewModel(repository: PlanRepository) : ViewModel() {
             _state.value = if (answers == null) {
                 PromptState.NoAnswers
             } else {
-                val builder = PromptBuilder(repository.asset("prompt_template.md"), repository.asset("example_plan.json"))
-                PromptState.Ready(builder.build(answers, repository.latestSummaryText()), QuestionnaireRules.check(answers))
+                val builder = PromptBuilder(repository.asset("prompt_template.md"), repository.asset("example_plan.json"), repository.promptExercises())
+                PromptState.Ready(
+                    builder.build(answers, repository.latestSummaryText(), repository.nextBlockSection(repository.progressionRules(settings.settings.first().progressionRules))),
+                    QuestionnaireRules.check(answers),
+                )
             }
         }
     }
@@ -72,7 +79,7 @@ class PromptViewModel(repository: PlanRepository) : ViewModel() {
 
 @Composable
 fun PromptScreen(onBack: () -> Unit, onImport: () -> Unit, onQuestionnaire: () -> Unit) {
-    val vm = appViewModel { PromptViewModel(it) }
+    val vm = appContextViewModel { repo, app -> PromptViewModel(repo, (app as HybridCoachApp).container.settings) }
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()

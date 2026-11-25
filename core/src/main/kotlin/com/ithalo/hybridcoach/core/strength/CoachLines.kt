@@ -24,6 +24,7 @@ object CoachLines {
 
     const val TEN_SECONDS_LEFT = "Faltam 10 segundos"
     const val SESSION_DONE = "Treino concluído. Mandou bem!"
+    const val WORK_DONE_AWAY = "O tempo do exercício terminou enquanto você estava fora. Pode registrar a série."
     const val NEW_RECORD = "Novo recorde!"
 
     private fun describe(n: NextSet, sameExercise: Boolean): String {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -40,6 +41,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.ithalo.hybridcoach.R
+import com.ithalo.hybridcoach.ui.common.MuscleChips
 import com.ithalo.hybridcoach.data.PlanRepository
 import com.ithalo.hybridcoach.data.PlannedExerciseWithName
 import com.ithalo.hybridcoach.data.PlannedSessionEntity
@@ -50,6 +52,7 @@ import com.ithalo.hybridcoach.ui.player.formatKg
 import com.ithalo.hybridcoach.data.VARIANT_GYM
 import com.ithalo.hybridcoach.data.VARIANT_HOME
 import com.ithalo.hybridcoach.ui.common.ChoiceChips
+import com.ithalo.hybridcoach.core.schedule.Reentry
 import com.ithalo.hybridcoach.ui.common.variantLabel
 import com.ithalo.hybridcoach.ui.common.ScreenColumn
 import com.ithalo.hybridcoach.ui.common.ScreenScaffold
@@ -142,6 +145,16 @@ fun SessionScreen(sessionId: Long, onBack: () -> Unit, onStart: (Long, String) -
                     StatusBadge(s.status)
                     s.skipReason?.takeIf { it.isNotBlank() }?.let { Text(it, style = Retro.type.body, color = c.inkSoft) }
                 }
+                val reentry = Reentry.fromCode(s.reentryApplied)
+                if (reentry != null && reentry != Reentry.NONE) {
+                    val label = when (reentry) {
+                        Reentry.SHORT -> R.string.reentry_short_label
+                        Reentry.MEDIUM -> R.string.reentry_medium_label
+                        Reentry.LONG -> R.string.reentry_long_label
+                        else -> R.string.reentry_restart_label
+                    }
+                    Text(stringResource(R.string.session_reentry_applied, s.gapDaysAtStart ?: 0, stringResource(label)), style = Retro.type.bodySmall, color = c.inkSoft)
+                }
             }
 
             if (s.type == "strength") {
@@ -157,7 +170,7 @@ fun SessionScreen(sessionId: Long, onBack: () -> Unit, onStart: (Long, String) -
                 if (s.status != "skipped") {
                     RetroButton(onClick = { onStart(s.id, s.type) }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                         PixelIcon("play", size = 16.dp)
-                        Text(stringResource(if (setLogs.isEmpty()) R.string.today_start else R.string.session_resume))
+                        Text(stringResource(if (setLogs.isEmpty() && s.startedAt == null) R.string.today_start else R.string.session_resume))
                     }
                 }
                 RetroWindow(stringResource(R.string.session_window_exercises), Modifier.fillMaxWidth()) {
@@ -238,21 +251,28 @@ fun SessionScreen(sessionId: Long, onBack: () -> Unit, onStart: (Long, String) -
         }
 
         if (showSkip) {
-            var reason by remember { mutableStateOf("") }
+            var kind by remember { mutableStateOf<Int?>(null) }
+            var note by remember { mutableStateOf("") }
+            val kindText = kind?.let { stringResource(it) }
+            val reason = listOfNotNull(kindText, note.trim().takeIf { it.isNotEmpty() }).joinToString(": ")
             RetroDialog(
                 onDismissRequest = { showSkip = false },
                 title = stringResource(R.string.session_skip_title),
-                icon = RetroIconKind.QUESTION,
+                icon = RetroIconKind.WARNING,
                 text = {
-                    RetroTextField(
-                        value = reason,
-                        onValueChange = { reason = it },
-                        label = stringResource(R.string.session_skip_reason),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HelpText(stringResource(R.string.session_skip_help))
+                        ChoiceChips(SKIP_REASONS, kind ?: 0, { stringResource(it) }) { kind = it }
+                        RetroTextField(
+                            value = note,
+                            onValueChange = { note = it },
+                            label = stringResource(R.string.session_skip_reason),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 },
                 confirmButton = {
-                    RetroButton(onClick = { vm.skip(reason); showSkip = false }) { Text(stringResource(R.string.action_confirm)) }
+                    RetroButton(onClick = { vm.skip(reason); showSkip = false }, enabled = kind != null) { Text(stringResource(R.string.action_confirm)) }
                 },
                 dismissButton = { RetroOutlinedButton(onClick = { showSkip = false }) { Text(stringResource(R.string.action_cancel)) } },
             )
@@ -265,6 +285,7 @@ private fun ExerciseRow(item: PlannedExerciseWithName) {
     val e = item.exercise
     Column {
         Text(item.exerciseName, style = Retro.type.heading)
+        MuscleChips(item.effectiveExerciseId, Modifier.padding(vertical = 2.dp))
         val load = e.loadKg?.let { if (it == it.toLong().toDouble()) "${it.toLong()} kg" else "$it kg" } ?: stringResource(R.string.session_load_free)
         val parts = buildList {
             add("${e.sets} × ${e.reps}")
@@ -276,3 +297,8 @@ private fun ExerciseRow(item: PlannedExerciseWithName) {
         if (e.notes.isNotBlank()) Text(e.notes, style = Retro.type.bodySmall, color = Retro.colors.inkSoft)
     }
 }
+
+/** Reasons offered for "Pular de vez" (one is required). */
+private val SKIP_REASONS = listOf(
+    R.string.session_skip_injury, R.string.session_skip_illness, R.string.session_skip_travel, R.string.session_skip_race, R.string.session_skip_other,
+)

@@ -14,6 +14,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -25,6 +26,7 @@ import com.ithalo.hybridcoach.core.questionnaire.COMMON_LIFTS
 import com.ithalo.hybridcoach.core.questionnaire.IssueCode
 import com.ithalo.hybridcoach.core.questionnaire.IssueSeverity
 import com.ithalo.hybridcoach.core.questionnaire.KnownLift
+import com.ithalo.hybridcoach.core.questionnaire.ExtraKind
 import com.ithalo.hybridcoach.core.questionnaire.Location
 import com.ithalo.hybridcoach.core.questionnaire.Priority
 import com.ithalo.hybridcoach.core.questionnaire.QuestionnaireAnswers
@@ -320,7 +322,34 @@ private fun LocationStep(a: QuestionnaireAnswers, vm: QuestionnaireViewModel) {
     }
     SwitchRow(stringResource(R.string.q_bike), a.hasBike) { v -> vm.update { it.copy(hasBike = v) } }
     HelpText(stringResource(R.string.q_bike_help))
+    ExtrasQuestion(a, vm)
 }
+
+/** Extra home sessions: how many a week (none, 1 or 2) and which kinds; a bonus, never a miss. */
+@Composable
+private fun ExtrasQuestion(a: QuestionnaireAnswers, vm: QuestionnaireViewModel) {
+    Text(stringResource(R.string.q_extras), Modifier.padding(top = 8.dp), style = Retro.type.heading)
+    HelpText(stringResource(R.string.q_extras_help))
+    ChoiceChips((0..QuestionnaireAnswers.MAX_EXTRA_SESSIONS).toList(), a.extraSessions.coerceIn(0, QuestionnaireAnswers.MAX_EXTRA_SESSIONS), {
+        if (it == 0) stringResource(R.string.q_extras_none) else pluralStringResource(R.plurals.q_extras_per_week, it, it)
+    }) { n -> vm.update { it.copy(extraSessions = n) } }
+    if (a.extraSessions > 0) {
+        Text(stringResource(R.string.q_extras_kinds))
+        MultiChips(a.availableExtraKinds, a.extraKinds.toSet(), { extraKindLabel(it) }) { k ->
+            vm.update { cur -> cur.copy(extraKinds = ExtraKind.entries.filter { if (it == k) it !in cur.extraKinds else it in cur.extraKinds }) }
+        }
+        HelpText(stringResource(if (a.hasBike) R.string.q_extras_kinds_help else R.string.q_extras_kinds_help_no_bike))
+    }
+}
+
+@Composable
+private fun extraKindLabel(k: ExtraKind) = stringResource(
+    when (k) {
+        ExtraKind.BIKE -> R.string.extra_kind_bike
+        ExtraKind.CORE -> R.string.extra_kind_core
+        ExtraKind.MOBILITY -> R.string.extra_kind_mobility
+    },
+)
 
 @Composable
 private fun YouStep(a: QuestionnaireAnswers, vm: QuestionnaireViewModel) {

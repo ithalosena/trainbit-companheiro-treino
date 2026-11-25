@@ -34,6 +34,7 @@ import androidx.navigation.navArgument
 import com.ithalo.hybridcoach.R
 import com.ithalo.hybridcoach.data.AppSettings
 import com.ithalo.hybridcoach.ui.block.BlockScreen
+import com.ithalo.hybridcoach.ui.block.CloseBlockScreen
 import com.ithalo.hybridcoach.ui.block.ExportScreen
 import com.ithalo.hybridcoach.ui.block.ImportScreen
 import com.ithalo.hybridcoach.ui.block.PromptScreen
@@ -139,6 +140,7 @@ fun AppNav(settings: AppSettings) {
                             onStart = { id, type -> nav.navigate(if (type == "run") "run/$id" else "player/$id") },
                             onCreateBlock = { nav.navigate("block") },
                             onProfile = { goTab("profile") },
+                            onCloseBlock = { nav.navigate("close_block") },
                         )
                     }
                     composable("calendar") { CalendarScreen(onOpenSession = { nav.navigate("session/$it") }, onBlock = { nav.navigate("block") }) }
@@ -151,7 +153,11 @@ fun AppNav(settings: AppSettings) {
                             onImport = { nav.navigate("import") },
                             onExport = { nav.navigate("export") },
                             onHistory = { nav.navigate("history") },
+                            onCloseBlock = { nav.navigate("close_block") },
                         )
+                    }
+                    composable("close_block") {
+                        CloseBlockScreen(onBack = { nav.popBackStack() }, onQuestionnaire = { nav.navigate("questionnaire") })
                     }
                     composable("profile") {
                         ProfileScreen(onTrophies = { nav.navigate("trophies") }, onItems = { nav.navigate("items") })

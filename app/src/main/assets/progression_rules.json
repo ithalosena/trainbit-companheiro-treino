@@ -1,0 +1,12 @@
+{
+  "increment_kg": 2.5,
+  "small_increment_kg": 1.0,
+  "heavy_from_kg": 20.0,
+  "max_rpe_to_increase": 8.0,
+  "reduce_after_failures_pct": 5,
+  "max_weekly_run_increase_pct": 10,
+  "min_adherence_pct": 60,
+  "long_pause_days": 14,
+  "max_accessory_swap_pct": 33,
+  "load_jump_warn_pct": 10
+}

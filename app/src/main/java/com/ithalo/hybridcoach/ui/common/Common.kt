@@ -260,11 +260,11 @@ fun <T> MultiChips(options: List<T>, selected: Set<T>, label: @Composable (T) ->
 }
 
 @Composable
-fun IntStepper(label: String, value: Int, range: IntRange, step: Int = 1, suffix: String = "", onChange: (Int) -> Unit) {
+fun IntStepper(label: String, value: Int, range: IntRange, step: Int = 1, suffix: String = "", format: (Int) -> String = { "$it$suffix" }, onChange: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), style = Retro.type.body)
         RetroIconButton(onClick = { onChange((value - step).coerceIn(range)) }, enabled = value > range.first) { PixelIcon("minus", size = 16.dp) }
-        Text("$value$suffix", Modifier.width(80.dp).wrapContentSize(), style = Retro.type.heading, color = Retro.colors.ink)
+        Text(format(value), Modifier.width(80.dp).wrapContentSize(), style = Retro.type.heading, color = Retro.colors.ink)
         RetroIconButton(onClick = { onChange((value + step).coerceIn(range)) }, enabled = value < range.last) { PixelIcon("plus", size = 16.dp) }
     }
 }

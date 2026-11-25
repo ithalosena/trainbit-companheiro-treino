@@ -1,6 +1,7 @@
 package com.ithalo.hybridcoach.core.prompt
 
 import com.ithalo.hybridcoach.core.plan.PlanValidator
+import com.ithalo.hybridcoach.core.questionnaire.ExtraKind
 import com.ithalo.hybridcoach.core.questionnaire.KnownLift
 import com.ithalo.hybridcoach.core.questionnaire.Location
 import com.ithalo.hybridcoach.core.questionnaire.QuestionnaireAnswers
@@ -119,5 +120,69 @@ class PromptBuilderTest {
             text,
         )
         assertNotNull(text)
+    }
+
+    @Test
+    fun `without extras the AI is told not to add optional sessions`() {
+        val prompt = builder.build(answers, null)
+        assertFalse("## Treinos extras em casa" in prompt)
+        assertContains(prompt, "Não inclua sessões extras: nenhuma sessão com `optional`.")
+        assertFalse("Treinos extras em casa:" in prompt)
+    }
+
+    @Test
+    fun `extras section lists only the chosen kinds`() {
+        val prompt = builder.build(answers.copy(extraSessions = 2, extraKinds = listOf(ExtraKind.CORE)), null)
+        assertContains(prompt, "## Treinos extras em casa")
+        assertContains(prompt, "O usuário quer 2 sessões extras por semana, feitas em casa")
+        assertContains(prompt, "`\"optional\": true`")
+        assertContains(prompt, "- Abdominais:")
+        assertFalse("- Bike ergométrica:" in prompt)
+        assertFalse("- Alongamento e mobilidade:" in prompt)
+        assertContains(prompt, "- Treinos extras em casa: 2 por semana (abdominais)")
+        assertContains(prompt, "siga a seção \"Treinos extras em casa\"")
+    }
+
+    @Test
+    fun `no chosen kind offers every available one, the bike only to who has it`() {
+        val withBike = builder.build(answers.copy(extraSessions = 1, hasBike = true), null)
+        assertContains(withBike, "O usuário quer 1 sessão extra por semana")
+        assertContains(withBike, "- Bike ergométrica:")
+        assertContains(withBike, "- Abdominais:")
+        assertContains(withBike, "- Alongamento e mobilidade:")
+        assertContains(withBike, "(bike, abdominais, alongamento)")
+        val noBike = builder.build(answers.copy(extraSessions = 1, extraKinds = listOf(ExtraKind.BIKE)), null)
+        assertFalse("- Bike ergométrica:" in noBike)
+        assertContains(noBike, "(abdominais, alongamento)")
+    }
+
+    private val appExercises = com.ithalo.hybridcoach.core.exercises.ExerciseCatalog.parseCatalog(resource("exercises_catalog.json")).filter { !it.autoTranslated }
+
+    @Test
+    fun `the prompt lists the valid exercises and asks for their ids`() {
+        val prompt = PromptBuilder(resource("prompt_template.md"), resource("example_plan.json"), appExercises).build(answers, null)
+        assertContains(prompt, "## Exercícios válidos")
+        assertContains(prompt, "- `supino-reto-barra`: Supino reto com barra")
+        assertContains(prompt, "- `leg-press-45`: Leg press 45")
+        assertContains(prompt, "copie o nome exatamente como está em `name` e o id em `exercise_id`")
+        assertContains(prompt, "`\"custom\": true`")
+        assertFalse("Use apenas exercícios comuns de academia" in prompt)
+    }
+
+    @Test
+    fun `training only at home lists only what can be done at home`() {
+        val home = answers.copy(locations = listOf(Location.HOME))
+        val prompt = PromptBuilder(resource("prompt_template.md"), resource("example_plan.json"), appExercises).build(home, null)
+        assertContains(prompt, "- `flexao-braco`:")
+        assertContains(prompt, "- `rosca-alternada-halteres`:")
+        assertFalse("`leg-press-45`" in prompt)
+        assertFalse("`bike-ergometrica`" in prompt)
+        val withBike = PromptBuilder(resource("prompt_template.md"), resource("example_plan.json"), appExercises).build(home.copy(hasBike = true), null)
+        assertContains(withBike, "- `bike-ergometrica`:")
+    }
+
+    @Test
+    fun `without a list the old rule stays`() {
+        assertContains(builder.build(answers, null), "Use apenas exercícios comuns de academia, com nomes em português.")
     }
 }

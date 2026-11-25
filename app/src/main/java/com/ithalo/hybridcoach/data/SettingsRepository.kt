@@ -3,6 +3,8 @@ package com.ithalo.hybridcoach.data
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -19,6 +21,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class AppSettings(
     val voiceEnabled: Boolean = true,
@@ -36,6 +40,12 @@ data class AppSettings(
     val darkMode: DarkMode = DarkMode.SYSTEM,
     /** First-launch tour finished (or skipped). */
     val onboardingDone: Boolean = false,
+    /** Coin opening on a cold start (Ajustes > Aparência). */
+    val introAnimation: Boolean = true,
+    /** Which pet: boy, cat, penguin or ghost ([com.ithalo.hybridcoach.ui.avatar.AvatarAssets.CHARACTERS]). */
+    val character: String = "boy",
+    /** The user's progression rules (core ProgressionRules as JSON); null: the defaults of assets/progression_rules.json. */
+    val progressionRules: String? = null,
     /** How the app greets the player; blank = no name. */
     val playerName: String = "",
     /** Training reminders: off until the player turns them on. Times are minutes since midnight. */
@@ -79,6 +89,9 @@ class SettingsRepository(private val context: Context) {
         val PALETTE = stringPreferencesKey("palette")
         val DARK_MODE = stringPreferencesKey("dark_mode")
         val ONBOARDING = booleanPreferencesKey("onboarding_done")
+        val INTRO = booleanPreferencesKey("intro_animation")
+        val CHARACTER = stringPreferencesKey("avatar_character")
+        val PROGRESSION = stringPreferencesKey("progression_rules")
         val PLAYER_NAME = stringPreferencesKey("player_name")
         val REMINDERS = booleanPreferencesKey("reminders_enabled")
         val REMINDER_STRENGTH = intPreferencesKey("reminder_strength_minutes")
@@ -93,6 +106,46 @@ class SettingsRepository(private val context: Context) {
         val EQUIPPED_TITLE = stringPreferencesKey("game_equipped_title")
         val EQUIPPED_FRAME = stringPreferencesKey("game_equipped_frame")
         val EQUIPPED_STICKER = stringPreferencesKey("game_equipped_sticker")
+    }
+
+    /** Every stored preference as JSON (type + value per key), for the backup file. */
+    suspend fun exportAll(): String {
+        val out = JSONObject()
+        for ((key, value) in context.dataStore.data.first().asMap()) {
+            val entry = JSONObject()
+            when (value) {
+                is Boolean -> entry.put("t", "b").put("v", value)
+                is Int -> entry.put("t", "i").put("v", value)
+                is Long -> entry.put("t", "l").put("v", value)
+                is Float -> entry.put("t", "f").put("v", value.toDouble())
+                is Double -> entry.put("t", "d").put("v", value)
+                is String -> entry.put("t", "s").put("v", value)
+                is Set<*> -> entry.put("t", "ss").put("v", JSONArray(value.map { it.toString() }))
+                else -> continue
+            }
+            out.put(key.name, entry)
+        }
+        return out.toString()
+    }
+
+    /** Replaces every stored preference with the ones in [json] (the output of [exportAll]). */
+    suspend fun importAll(json: String) {
+        val root = JSONObject(json)
+        context.dataStore.edit { p ->
+            p.clear()
+            for (name in root.keys()) {
+                val e = root.getJSONObject(name)
+                when (e.getString("t")) {
+                    "b" -> p[booleanPreferencesKey(name)] = e.getBoolean("v")
+                    "i" -> p[intPreferencesKey(name)] = e.getInt("v")
+                    "l" -> p[longPreferencesKey(name)] = e.getLong("v")
+                    "f" -> p[floatPreferencesKey(name)] = e.getDouble("v").toFloat()
+                    "d" -> p[doublePreferencesKey(name)] = e.getDouble("v")
+                    "s" -> p[stringPreferencesKey(name)] = e.getString("v")
+                    "ss" -> p[stringSetPreferencesKey(name)] = e.getJSONArray("v").let { a -> (0 until a.length()).map(a::getString).toSet() }
+                }
+            }
+        }
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { read(it) }.distinctUntilChanged()
@@ -115,6 +168,9 @@ class SettingsRepository(private val context: Context) {
             p[Keys.PALETTE] = s.palette.name
             p[Keys.DARK_MODE] = s.darkMode.name
             p[Keys.ONBOARDING] = s.onboardingDone
+            p[Keys.INTRO] = s.introAnimation
+            p[Keys.CHARACTER] = s.character
+            s.progressionRules?.let { p[Keys.PROGRESSION] = it } ?: p.remove(Keys.PROGRESSION)
             p[Keys.PLAYER_NAME] = s.playerName
             p[Keys.REMINDERS] = s.remindersEnabled
             p[Keys.REMINDER_STRENGTH] = s.reminderStrengthMinutes
@@ -167,6 +223,9 @@ class SettingsRepository(private val context: Context) {
             palette = RetroPalette.entries.firstOrNull { it.name == p[Keys.PALETTE] } ?: d.palette,
             darkMode = DarkMode.entries.firstOrNull { it.name == p[Keys.DARK_MODE] } ?: d.darkMode,
             onboardingDone = p[Keys.ONBOARDING] ?: d.onboardingDone,
+            introAnimation = p[Keys.INTRO] ?: d.introAnimation,
+            character = p[Keys.CHARACTER] ?: d.character,
+            progressionRules = p[Keys.PROGRESSION],
             playerName = p[Keys.PLAYER_NAME] ?: d.playerName,
             remindersEnabled = p[Keys.REMINDERS] ?: d.remindersEnabled,
             reminderStrengthMinutes = p[Keys.REMINDER_STRENGTH] ?: d.reminderStrengthMinutes,

@@ -36,6 +36,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.ithalo.hybridcoach.R
+import com.ithalo.hybridcoach.ui.retro.RetroWindow
+import androidx.compose.ui.res.pluralStringResource
+import com.ithalo.hybridcoach.core.block.BlockState
 import com.ithalo.hybridcoach.core.game.GameState
 import com.ithalo.hybridcoach.core.schedule.PlanScheduler
 import com.ithalo.hybridcoach.data.PlanEntity
@@ -67,6 +70,17 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import com.ithalo.hybridcoach.core.schedule.Modality
+import com.ithalo.hybridcoach.core.schedule.ModalityQueue
+import com.ithalo.hybridcoach.core.schedule.QueueSession
+import com.ithalo.hybridcoach.core.schedule.Reentry
+import com.ithalo.hybridcoach.data.REENTRY_DECLINED
+import com.ithalo.hybridcoach.ui.retro.RetroOutlinedButton
+import kotlinx.coroutines.launch
 
 data class PlanWithSessions(val plan: PlanEntity?, val sessions: List<PlannedSessionEntity>)
 
@@ -84,7 +98,7 @@ class PlanViewModel(repository: PlanRepository) : ViewModel() {
 }
 
 @Composable
-fun TodayScreen(onOpenSession: (Long) -> Unit, onStart: (Long, String) -> Unit, onCreateBlock: () -> Unit, onProfile: () -> Unit) {
+fun TodayScreen(onOpenSession: (Long) -> Unit, onStart: (Long, String) -> Unit, onCreateBlock: () -> Unit, onProfile: () -> Unit, onCloseBlock: () -> Unit = {}) {
     val vm = appViewModel { PlanViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
     val run by RunTracker.state.collectAsStateWithLifecycle()
@@ -110,7 +124,7 @@ fun TodayScreen(onOpenSession: (Long) -> Unit, onStart: (Long, String) -> Unit, 
             else -> {
                 // A run in progress (or interrupted) gets a shortcut back to its screen.
                 val activeRun = run?.sessionId ?: progress?.sessionId
-                TodayContent(current.plan, current.sessions, today, activeRun, game, onOpenSession, onStart)
+                TodayContent(current.plan, current.sessions, today, activeRun, game, onOpenSession, onStart, onCloseBlock, onCreateBlock)
             }
         }
     }
@@ -133,6 +147,8 @@ private fun TodayContent(
     game: GameState?,
     onOpenSession: (Long) -> Unit,
     onStart: (Long, String) -> Unit,
+    onCloseBlock: () -> Unit,
+    onCreateBlock: () -> Unit,
 ) {
     val c = Retro.colors
     val start = LocalDate.parse(plan.startDate)
@@ -142,21 +158,62 @@ private fun TodayContent(
     // The stage goes to the day's required session; a complementary one (optional) only when it is all there is.
     val required = todays.filter { !it.optional }
     val main = required.firstOrNull { it.status == "pending" } ?: required.firstOrNull() ?: todays.firstOrNull { it.status == "pending" } ?: todays.firstOrNull()
-    val next = sessions.firstOrNull { it.date > today.toString() && it.status == "pending" }
+    // The next main session; an extra home session only when nothing else is planned.
+    val upcoming = sessions.filter { it.date > today.toString() && it.status == "pending" }
+    val next = upcoming.firstOrNull { !it.optional } ?: upcoming.firstOrNull()
     val weekStart = today.minusDays((today.dayOfWeek.value - 1).toLong())
+    // The block ends when every queue is done (Item 8): dates are projections, the weeks are the plan's estimate.
+    val repository = appContainer().repository
+    LaunchedEffect(plan.id, today) { repository.refreshQueue(today) }
+    val queue = remember(sessions) { repository.queueOf(sessions) }
+    val total = queue.count { !it.optional }
+    val remaining = ModalityQueue.remaining(queue)
+    val ceiling = ModalityQueue.ceiling(start, plan.durationWeeks)
+    val weekNumber = (ChronoUnit.DAYS.between(anchor, today) / 7 + 1).toInt()
     val weekLabel = when {
         today < anchor -> stringResource(R.string.today_starts_on, anchor.short())
-        today > end -> stringResource(R.string.today_block_finished)
-        else -> stringResource(R.string.today_week_of, (ChronoUnit.DAYS.between(anchor, today) / 7 + 1).toInt(), plan.durationWeeks)
+        total > 0 && remaining == 0 -> stringResource(R.string.today_block_finished)
+        today > end -> stringResource(R.string.today_week_over, weekNumber, plan.durationWeeks)
+        else -> stringResource(R.string.today_week_of, weekNumber, plan.durationWeeks)
     }
 
     ScreenColumn {
+        // About 20% of the sessions left (or past the ceiling) and not closed yet: prepare the next one.
+        val blockState = when {
+            plan.closedAt != null -> BlockState.CLOSED
+            today < start -> BlockState.PLANNED
+            ModalityQueue.closing(total, remaining, today, ceiling) -> BlockState.CLOSING
+            else -> BlockState.ACTIVE
+        }
+        if (blockState == BlockState.CLOSING) {
+            RetroWindow(stringResource(R.string.today_block_closing_window), Modifier.fillMaxWidth()) {
+                Text(
+                    when {
+                        today > ceiling && remaining > 0 -> pluralStringResource(R.plurals.today_block_ceiling, remaining, ceiling.short(), remaining)
+                        remaining > 0 -> pluralStringResource(R.plurals.today_block_closing, remaining, remaining)
+                        else -> stringResource(R.string.today_block_over)
+                    },
+                    style = Retro.type.body,
+                )
+                RetroButton(onClick = onCloseBlock, modifier = Modifier.fillMaxWidth()) {
+                    PixelIcon("medal", size = 16.dp)
+                    Text(stringResource(R.string.today_block_prepare))
+                }
+            }
+        } else if (blockState == BlockState.CLOSED) {
+            InfoCard(stringResource(R.string.today_block_closed))
+            RetroButton(onClick = onCreateBlock, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.today_block_next)) }
+        }
         if (activeRun != null) {
             InfoCard(stringResource(R.string.today_run_active))
             RetroButton(onClick = { onStart(activeRun, "run") }, modifier = Modifier.fillMaxWidth()) {
                 PixelIcon("run", size = 16.dp)
                 Text(stringResource(R.string.today_run_open))
             }
+        }
+
+        if (main != null && main.status == "pending" && main.startedAt == null && !main.optional && main.reentryApplied == null && main.id != activeRun) {
+            ReentryCard(main, onCloseBlock)
         }
 
         // Today's session as the screen's "stage": illustration, name, start key with its reward.
@@ -191,7 +248,7 @@ private fun TodayContent(
             }
             when {
                 main.status == "pending" && main.id != activeRun -> RetroRewardButton(
-                    stringResource(R.string.today_start).uppercase(PT_BR),
+                    stringResource(if (main.startedAt != null) R.string.today_continue else R.string.today_start).uppercase(PT_BR),
                     stringResource(R.string.game_xp_plus, GameEngine.XP_SESSION),
                     onClick = { onStart(main.id, main.type) },
                 )
@@ -202,6 +259,7 @@ private fun TodayContent(
         }
 
         SectionTitle(weekLabel)
+        QueueProgress(queue)
         WeekStrip(weekStart, today, sessions, onOpenSession)
 
         game?.let { Missions(it.missions) }
@@ -209,6 +267,56 @@ private fun TodayContent(
         if (next != null) {
             SectionTitle(stringResource(R.string.today_window_next))
             SessionCard(next, showDate = true) { onOpenSession(next.id) }
+        }
+    }
+}
+
+/** "Musculação 10/16 · Corrida 7/12 · fim previsto 12 dez": progress of each queue and the projected end. */
+@Composable
+private fun QueueProgress(queue: List<QueueSession>) {
+    val parts = buildList {
+        val (sd, st) = ModalityQueue.progress(queue, Modality.STRENGTH)
+        if (st > 0) add(stringResource(R.string.today_progress_strength, sd, st))
+        val (rd, rt) = ModalityQueue.progress(queue, Modality.RUN)
+        if (rt > 0) add(stringResource(R.string.today_progress_run, rd, rt))
+        if (ModalityQueue.remaining(queue) > 0) ModalityQueue.projectedEnd(queue)?.let { add(stringResource(R.string.today_projected_end, it.short())) }
+    }
+    if (parts.isNotEmpty()) Text(parts.joinToString(" · "), style = Retro.type.bodySmall, color = Retro.colors.inkSoft)
+}
+
+/**
+ * Coming back after a pause in this session's modality: the app proposes the lighter start (core Reentry) and the
+ * user confirms or keeps the plan. Shown once per session; the answer is kept on the session.
+ */
+@Composable
+private fun ReentryCard(session: PlannedSessionEntity, onNewBlock: () -> Unit) {
+    val repository = appContainer().repository
+    val scope = rememberCoroutineScope()
+    var found by remember(session.id) { mutableStateOf<Pair<Int, Reentry>?>(null) }
+    LaunchedEffect(session.id) { found = repository.reentryFor(session) }
+    val (gap, band) = found ?: return
+    val run = session.type == "run"
+    val text = when (band) {
+        Reentry.NONE -> return
+        Reentry.SHORT -> if (run) R.string.reentry_run_short else return
+        Reentry.MEDIUM -> if (run) R.string.reentry_run_medium else R.string.reentry_strength_medium
+        Reentry.LONG -> if (run) R.string.reentry_run_long else R.string.reentry_strength_long
+        Reentry.RESTART -> if (run) R.string.reentry_restart_run else R.string.reentry_restart_strength
+    }
+    RetroWindow(stringResource(R.string.reentry_window), Modifier.fillMaxWidth()) {
+        Text(stringResource(text, gap), style = Retro.type.body)
+        if (band == Reentry.RESTART) {
+            RetroButton(onClick = { scope.launch { repository.setReentry(session.id, band.code) } }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.reentry_resume_block))
+            }
+            RetroOutlinedButton(onClick = onNewBlock, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.reentry_new_block)) }
+        } else {
+            RetroButton(onClick = { scope.launch { repository.setReentry(session.id, band.code) } }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.reentry_apply))
+            }
+            RetroOutlinedButton(onClick = { scope.launch { repository.setReentry(session.id, REENTRY_DECLINED) } }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.reentry_keep_plan))
+            }
         }
     }
 }

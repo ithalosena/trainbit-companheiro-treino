@@ -30,6 +30,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ithalo.hybridcoach.R
+import com.ithalo.hybridcoach.core.game.ItemUnlock
+import com.ithalo.hybridcoach.core.avatar.GymCatalog
 import com.ithalo.hybridcoach.core.game.ItemKind
 import com.ithalo.hybridcoach.core.game.ItemState
 import com.ithalo.hybridcoach.ui.common.ScreenColumn
@@ -107,6 +109,7 @@ fun ItemsScreen(onBack: () -> Unit) {
                 }
             }
 
+            GymSection(s.level)
         }
 
         // The details open in a window in front of the grid, so there is no scrolling to find them.
@@ -156,6 +159,26 @@ private fun InventoryCell(item: ItemState, selected: Boolean, equipped: Boolean,
                 Modifier.align(Alignment.TopStart).padding(4.dp).background(c.accent).padding(horizontal = 3.dp),
                 style = Retro.type.label.copy(fontSize = 9.sp),
                 color = readableOn(c.accent),
+            )
+        }
+    }
+}
+
+/** The pet's gym: what is already there and the level that brings each next piece. */
+@Composable
+private fun GymSection(level: Int) {
+    val c = Retro.colors
+    SectionTitle(stringResource(R.string.items_gym))
+    Text(stringResource(R.string.items_gym_help), style = Retro.type.bodySmall, color = c.inkSoft)
+    GymCatalog.pieces.forEach { piece ->
+        val on = GymCatalog.isUnlocked(piece, level, emptySet())
+        val need = (piece.unlock as? ItemUnlock.Level)?.level
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(if (on) piece.name else "???", style = Retro.type.body, color = if (on) c.ink else c.inkFaint)
+            Text(
+                if (on) stringResource(R.string.items_gym_there) else stringResource(R.string.items_gym_at_level, need ?: 0),
+                style = Retro.type.label,
+                color = c.inkSoft,
             )
         }
     }

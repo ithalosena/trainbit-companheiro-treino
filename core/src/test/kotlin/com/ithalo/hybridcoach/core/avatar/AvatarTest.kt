@@ -334,7 +334,7 @@ class AvatarAnimatorTest {
     @Test
     fun `it bobs and does a random behaviour from time to time`() {
         val a = AvatarAnimator(AvatarMood.NORMAL)
-        val frames = (0 until 1800L).map { a.frameAt(it * tick) }
+        val frames = (0 until 3600L).map { a.frameAt(it * tick) }
         assertTrue(frames.map { it.body }.toSet().containsAll(listOf("idle_0", "idle_1", "idle_2", "idle_3")))
         val calm = setOf("idle", "blink")
         val stretchOrScratch = frames.indices.filter { frames[it].body.substringBefore('_') !in calm || frames[it].x != AvatarSprites.HOME_X }
@@ -348,7 +348,7 @@ class AvatarAnimatorTest {
     @Test
     fun `a tired avatar dozes off instead of stretching`() {
         val a = AvatarAnimator(AvatarMood.TIRED)
-        val frames = (0 until 600L).map { a.frameAt(it * tick) }
+        val frames = (0 until 1200L).map { a.frameAt(it * tick) }
         assertTrue(frames.any { it.body.startsWith("sleep") && it.effects.isNotEmpty() })
         assertFalse(frames.any { it.body.startsWith("cheer") || it.body.startsWith("flex") || it.body.startsWith("walk") })
     }
@@ -356,20 +356,20 @@ class AvatarAnimatorTest {
     @Test
     fun `it blinks now and then, in the phase of its breathing`() {
         val a = AvatarAnimator(AvatarMood.NORMAL)
-        val frames = (0 until 300L).map { a.frameAt(it * tick) }
+        val frames = (0 until 600L).map { a.frameAt(it * tick) }
         val blinks = frames.indices.filter { frames[it].body.startsWith("blink") }
         assertTrue(blinks.size in 5..20, "blinks ${blinks.size}")
         // A blink lasts one tick and shows the idle drawing of that moment with the eyes shut.
         blinks.forEach { i ->
             assertTrue(i == 0 || !frames[i - 1].body.startsWith("blink"))
-            assertEquals("blink_${(i / 2) % 4}", frames[i].body) // idle holds each of its 4 frames for 2 ticks
+            assertEquals("blink_${(i / 4) % 4}", frames[i].body) // idle holds each of its 4 frames for 4 ticks
         }
-        assertTrue(AvatarAnimator(AvatarMood.TIRED).let { t -> (0 until 300L).none { t.frameAt(it * tick).body.startsWith("blink") } })
+        assertTrue(AvatarAnimator(AvatarMood.TIRED).let { t -> (0 until 600L).none { t.frameAt(it * tick).body.startsWith("blink") } })
     }
 
     @Test
     fun `it walks to both sides, mirrored when going left, and comes back home`() {
-        val frames = (0..20).flatMap { seed -> val a = AvatarAnimator(AvatarMood.NORMAL, seed); (0 until 1200L).map { a.frameAt(it * tick) } }
+        val frames = (0..20).flatMap { seed -> val a = AvatarAnimator(AvatarMood.NORMAL, seed); (0 until 2400L).map { a.frameAt(it * tick) } }
         val walking = frames.filter { it.body.startsWith("walk") }
         assertTrue(walking.any { it.flip } && walking.any { !it.flip })
         assertTrue(frames.all { it.x in 0..AvatarSprites.WIDTH - AvatarSprites.BODY_WIDTH })

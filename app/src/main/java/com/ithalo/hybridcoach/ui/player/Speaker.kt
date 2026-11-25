@@ -33,6 +33,9 @@ class Speaker(context: Context) {
 
     @Volatile var enabled = true
 
+    /** Voice volume from Settings (0.2 to 1, relative to the media volume); refreshed at every speak(). */
+    @Volatile private var volume = 1f
+
     private val settings = (context.applicationContext as HybridCoachApp).container.settings
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var ready = false
@@ -66,6 +69,7 @@ class Speaker(context: Context) {
                 // Stay "not ready" until the chosen voice is set, so nothing is said in the default voice.
                 scope.launch {
                     val s = settings.current()
+                    volume = s.voiceVolume
                     ready = CoachVoices.apply(engine, s.voiceName, s.voiceRate) || languageOk
                     _available.value = ready
                     flushQueue()
@@ -82,6 +86,7 @@ class Speaker(context: Context) {
 
     fun speak(text: String) {
         if (!enabled) return
+        scope.launch { volume = settings.current().voiceVolume }
         if (!ready) {
             synchronized(queued) { if (tts != null && queued.size < 5) queued.addLast(text) }
             return
@@ -93,7 +98,7 @@ class Speaker(context: Context) {
         val engine = tts
         if (!ready || engine == null) return
         if (pending.getAndIncrement() == 0) audio.requestAudioFocus(focusRequest)
-        val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1f) }
+        val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume) }
         engine.speak(text, TextToSpeech.QUEUE_ADD, params, "coach-${System.nanoTime()}")
     }
 

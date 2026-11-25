@@ -21,34 +21,50 @@ O usuário treina na academia, mas em alguns dias pode precisar treinar em casa.
 {{/HOME_VERSION}}
 {{#BIKE}}
 ## Bike ergométrica
-O usuário tem bike ergométrica. Você pode usá-la como aquecimento ou cardio leve dentro de sessões de musculação, como exercício "Bike ergométrica" com `reps` em tempo (ex.: `"10min"`), `sets: 1` e `load_kg: null`. Não substitua as sessões de corrida por bike. Também pode propor uma sessão complementar de bike em casa (ver "Sessões complementares").
+O usuário tem bike ergométrica em casa. Você pode usá-la como aquecimento ou cardio leve dentro de sessões de musculação, como exercício "Bike ergométrica" com `reps` em tempo (ex.: `"10min"`), `sets: 1` e `load_kg: null`. Não substitua as sessões de corrida por bike.
 
 {{/BIKE}}
+{{#EXTRAS}}
+## Treinos extras em casa
+{{EXTRAS}}
+
+{{/EXTRAS}}
+{{#EXERCISE_LIST}}
+## Exercícios válidos
+Formato: `exercise_id`: nome.
+{{EXERCISE_LIST}}
+
+{{/EXERCISE_LIST}}
+{{#NEXT_BLOCK}}
+## Continuidade com o bloco anterior
+{{NEXT_BLOCK}}
+
+{{/NEXT_BLOCK}}
 {{#PREVIOUS_BLOCK}}
 ## Resumo do bloco anterior
-Use este resumo para ajustar cargas, volume e ritmos do novo bloco (aderência, cargas atingidas, falhas, pace real e observações):
+Use este resumo para ajustar cargas, volume e ritmos do novo bloco (aderência às sessões principais, extras em casa feitos, cargas atingidas, falhas, pace real e observações):
 
 {{PREVIOUS_BLOCK}}
 
 {{/PREVIOUS_BLOCK}}
 ## Instruções
-- Use apenas exercícios comuns de academia, com nomes em português.
+- {{EXERCISE_RULE}}
 - {{DELOAD_INSTRUCTION}}
 - Respeite os dias disponíveis e os minutos por sessão informados no perfil. No máximo 2 sessões no mesmo dia.
 - Preencha `load_kg` com `null` quando não houver base para estimar a carga.
 - Use `weeks: [1, 2]` para agrupar semanas com sessões idênticas, em vez de repetir. Todas as semanas de 1 a {{DURATION_WEEKS}} devem aparecer exatamente uma vez.
 - Paces de corrida em segundos por km; `min` é o pace mais rápido e `max` o mais lento.
-- Sessões complementares: quando ajudar o objetivo e couber na rotina (um dia livre, bike em casa, um segundo treino leve no dia), inclua sessões extras marcadas com `"optional": true`. Elas são um bônus: não fazer não conta como falta. Use no máximo 2 por semana, leves (20 a 40 min), e nunca como substituto das sessões principais. Bike em casa entra como sessão `strength` com o exercício "Bike ergométrica" em tempo.
+- {{EXTRAS_INSTRUCTION}}
 
 ## Regras de saída
 Responda **somente** com JSON válido: sem comentários, sem texto antes ou depois, sem vírgula sobrando, sem cercas de código. Siga exatamente o schema abaixo.
 
 ## Schema (versão 1)
 - `schema_version`: sempre `1`.
-- `plan`: `name` (texto), `start_date` (`AAAA-MM-DD`, de preferência uma segunda-feira), `duration_weeks` (1 a 12), `goal` (texto), `notes` (texto curto).
+- `plan`: `name` (texto), `start_date` (`AAAA-MM-DD`, de preferência uma segunda-feira), `duration_weeks` (1 a 12), `goal` (texto), `notes` (texto curto). Opcional: `phase` (`base`, `progression`, `peak` ou `deload`).
 - `weeks[]`: `weeks` (lista de números de semana), `focus` (texto), `is_deload` (true/false), `sessions` (lista).
-- `sessions[]`: `day_of_week` (`mon|tue|wed|thu|fri|sat|sun`), `type` (`strength` ou `run`), `title`, `estimated_minutes`. Opcional: `optional` (`true` numa sessão complementar; omita nas principais).
-  - `strength` tem `exercises`: `name`, `sets` (1 a 10), `reps` (**texto**: `"8"`, `"6-8"`, `"AMRAP"`, `"30s"`), `load_kg` (número ou `null`), `rest_seconds` (0 a 600), `rpe_target` (1 a 10 ou `null`), `notes`. Opcional: `home_exercises` (mesmo formato de `exercises`), só quando pedido acima.
+- `sessions[]`: `day_of_week` (`mon|tue|wed|thu|fri|sat|sun`), `type` (`strength` ou `run`), `title`, `estimated_minutes`. Opcional: `optional` (`true` só numa sessão extra em casa; omita nas principais).
+  - `strength` tem `exercises`: `name`, `sets` (1 a 10), `reps` (**texto**: `"8"`, `"6-8"`, `"AMRAP"`, `"30s"`), `load_kg` (número ou `null`), `rest_seconds` (0 a 600), `rpe_target` (1 a 10 ou `null`), `notes`, e opcionais `exercise_id` (id da lista de exercícios válidos) `custom` (`true` só quando o exercício não está na lista) e `justification` (texto curto, quando a carga passa da partida sugerida). Opcional na sessão: `home_exercises` (mesmo formato de `exercises`), só quando pedido acima.
   - `run` tem `blocks`: `kind` (`warmup|steady|interval|recovery|cooldown`), exatamente um entre `duration_seconds` e `distance_m`, `target_pace_sec_per_km` (`{"min": n, "max": n}` com 150 a 900, `min <= max`, ou `null`), `repeat` (>= 1).
 
 ## Exemplo completo e válido

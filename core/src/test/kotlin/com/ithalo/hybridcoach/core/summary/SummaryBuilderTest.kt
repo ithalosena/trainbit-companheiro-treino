@@ -32,6 +32,24 @@ class SummaryBuilderTest {
     }
 
     @Test
+    fun `lateness and comebacks reach the summary`() {
+        val s = SummaryBuilder.build(
+            "Bloco", LocalDate.of(2026, 11, 9), LocalDate.of(2026, 12, 6),
+            listOf(
+                SessionRecord(SessionStatus.DONE, null, daysLate = 0),
+                SessionRecord(SessionStatus.DONE, null, daysLate = 2, reentry = "short"),
+                SessionRecord(SessionStatus.DONE, null, daysLate = 5, reentry = "declined"),
+                SessionRecord(SessionStatus.DONE, null, optional = true, daysLate = 9),
+            ),
+        )
+        assertEquals(2, s.adherence.doneLate)
+        assertEquals(3.5, s.adherence.avgDaysLate)
+        assertEquals(listOf("short"), s.adherence.reentries)
+        assertEquals(0, summary.adherence.doneLate)
+        assertEquals(null, summary.adherence.avgDaysLate)
+    }
+
+    @Test
     fun `json uses the documented field names`() {
         val json = Json.parseToJsonElement(SummaryBuilder.toJson(summary)).jsonObject
         assertEquals(1, json.getValue("summary_version").jsonPrimitive.int)
@@ -81,5 +99,26 @@ class SummaryBuilderTest {
     fun `unknown status value falls back to pending`() {
         assertEquals(SessionStatus.PENDING, SessionStatus.fromValue("???"))
         assertEquals(SessionStatus.SKIPPED, SessionStatus.fromValue("skipped"))
+    }
+
+    @Test
+    fun `extra home sessions stay out of the adherence and are counted apart`() {
+        val withExtras = records + listOf(
+            SessionRecord(SessionStatus.DONE, null, optional = true),
+            SessionRecord(SessionStatus.SKIPPED, "sem tempo", optional = true),
+            SessionRecord(SessionStatus.PENDING, null, optional = true),
+        )
+        val s = SummaryBuilder.build("Bloco 1", LocalDate.of(2026, 11, 9), LocalDate.of(2026, 12, 6), withExtras)
+        assertEquals(7, s.adherence.plannedSessions)
+        assertEquals(2, s.adherence.done)
+        assertEquals(4, s.adherence.skipped)
+        assertEquals(listOf("cansaço", "chuva"), s.adherence.skipReasons)
+        assertEquals(3, s.adherence.extrasPlanned)
+        assertEquals(1, s.adherence.extrasDone)
+        val json = Json.parseToJsonElement(SummaryBuilder.toJson(s)).jsonObject.getValue("adherence").jsonObject
+        assertEquals(3, json.getValue("extras_planned").jsonPrimitive.int)
+        assertEquals(1, json.getValue("extras_done").jsonPrimitive.int)
+        assertTrue("Extras em casa (bônus, fora da aderência): 1 de 3 feitos." in SummaryBuilder.toText(s))
+        assertTrue("Extras em casa" !in SummaryBuilder.toText(summary))
     }
 }

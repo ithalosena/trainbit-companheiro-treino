@@ -46,6 +46,18 @@ class GameEngineTest {
     }
 
     @Test
+    fun `a session marked done without any logged set or run gives only the reduced xp`() {
+        val bare = session(mon)
+        val logged = session(mon.plusDays(1))
+        val state = GameEngine.evaluate(facts(listOf(bare, logged), sets = listOf(set(logged))))
+        val sessionXp = state.xpLog.filter { it.reason.startsWith("Sessão de força concluída") }
+        assertEquals(setOf(GameEngine.XP_SESSION, GameEngine.XP_SESSION_UNLOGGED), sessionXp.map { it.amount }.toSet())
+        assertTrue(sessionXp.single { it.amount == GameEngine.XP_SESSION_UNLOGGED }.reason.endsWith("(sem registro)"))
+        // The session still counts as done for streaks, trophies and the block.
+        assertEquals(2, state.stats.sessionsDone)
+    }
+
+    @Test
     fun `strength session xp adds base, sets and first trophies`() {
         val s1 = session(mon)
         val state = GameEngine.evaluate(facts(listOf(s1), sets = List(3) { set(s1) }))

@@ -15,6 +15,15 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.delay
+import com.ithalo.hybridcoach.ui.retro.PixelCoin
+import com.ithalo.hybridcoach.core.game.CoinSpin
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.LaunchedEffect
+import android.provider.Settings
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,7 +64,7 @@ fun GameHud(onProfile: () -> Unit, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PixelSprite("coin", pixel = 2.dp, reward = true)
+            SpinningXpCoin(xp, level)
             Text(String.format(PT_BR, "%,d XP", xp), style = Retro.type.button, color = c.ink, maxLines = 1)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -79,4 +88,27 @@ fun GameHud(onProfile: () -> Unit, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/**
+ * The app's coin (the launcher icon) as the XP counter's icon: it turns once, in hard steps, when XP is gained or
+ * the level goes up (not on the first frame, and still when the system turns animations off).
+ */
+@Composable
+private fun SpinningXpCoin(xp: Int, level: Int) {
+    val context = LocalContext.current
+    val still = remember { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
+    var step by remember { mutableIntStateOf(0) }
+    val seen = remember { intArrayOf(-1, -1) }
+    LaunchedEffect(xp, level) {
+        val gained = seen[0] >= 0 && (xp > seen[0] || level > seen[1])
+        seen[0] = xp
+        seen[1] = level
+        if (!gained || still) return@LaunchedEffect
+        for (s in 1..CoinSpin.STEPS) {
+            delay(CoinSpin.STEP_MS)
+            step = s
+        }
+    }
+    PixelCoin(step, pixelSize = 1.dp)
 }

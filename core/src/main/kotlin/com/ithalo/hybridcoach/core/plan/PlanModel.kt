@@ -17,6 +17,8 @@ data class PlanInfo(
     val durationWeeks: Int,
     val goal: String,
     val notes: String,
+    /** Optional phase of the block: "base", "progression", "peak" or "deload". */
+    val phase: String? = null,
 )
 
 /** A group of weeks that share the same sessions (`weeks: [1, 2]`). */
@@ -65,6 +67,12 @@ data class ExerciseDef(
     val restSeconds: Int,
     val rpeTarget: Int?,
     val notes: String,
+    /** Optional id from the exercise list given in the prompt; when known, it wins over the name. */
+    val exerciseId: String? = null,
+    /** True when nothing in the list fitted and the AI made up the exercise. */
+    val custom: Boolean = false,
+    /** Why a load is above the suggested start of the previous block (short text). */
+    val justification: String? = null,
 )
 
 enum class RunBlockKind { WARMUP, STEADY, INTERVAL, RECOVERY, COOLDOWN }

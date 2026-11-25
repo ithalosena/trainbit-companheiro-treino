@@ -50,6 +50,22 @@ class RestNotifier(context: Context) {
         app.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endAt, doneIntent(app))
     }
 
+    /**
+     * A timed exercise is running: an alarm posts "time's up" when its target is reached, even if the player screen
+     * was left or the process is gone (the stopwatch itself is saved in the database).
+     */
+    fun scheduleWorkTimer(remainingMs: Long) {
+        cancelWorkTimer()
+        if (remainingMs <= 0) return
+        app.getSystemService(AlarmManager::class.java)
+            .setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + remainingMs, workDoneIntent(app))
+    }
+
+    fun cancelWorkTimer() {
+        app.getSystemService(AlarmManager::class.java).cancel(workDoneIntent(app))
+        NotificationManagerCompat.from(app).cancel(WORK_ID)
+    }
+
     /** The workout is open and unfinished: keeps it "in progress" in the notifications and the app alive. */
     fun workoutStarted(title: String, startedAt: Long) = WorkoutService.start(app, title, startedAt)
 
@@ -69,13 +85,15 @@ class RestNotifier(context: Context) {
 
     /** Receives the alarm that marks the end of the rest. */
     class DoneReceiver : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = postDone(context)
+        override fun onReceive(context: Context, intent: Intent) = postDone(context, timed = intent.getBooleanExtra(EXTRA_TIMED, false))
     }
 
     companion object {
         private const val CHANNEL_REST = "rest"
         private const val CHANNEL_REST_DONE = "rest_done"
         private const val ID = 4201
+        private const val WORK_ID = 4202
+        private const val EXTRA_TIMED = "timed"
 
         fun canNotify(context: Context): Boolean =
             Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
@@ -92,22 +110,27 @@ class RestNotifier(context: Context) {
         }
 
         @SuppressLint("MissingPermission")
-        private fun postDone(context: Context) {
+        private fun postDone(context: Context, timed: Boolean = false) {
             createChannels(context)
             val notification = NotificationCompat.Builder(context, CHANNEL_REST_DONE)
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                .setContentTitle(context.getString(R.string.rest_done_title))
-                .setContentText(context.getString(R.string.rest_done_text))
+                .setContentTitle(context.getString(if (timed) R.string.work_done_title else R.string.rest_done_title))
+                .setContentText(context.getString(if (timed) R.string.work_done_text else R.string.rest_done_text))
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setAutoCancel(true)
                 .setTimeoutAfter(30_000)
                 .setContentIntent(openApp(context))
                 .build()
-            if (canNotify(context)) NotificationManagerCompat.from(context).notify(ID, notification)
+            if (canNotify(context)) NotificationManagerCompat.from(context).notify(if (timed) WORK_ID else ID, notification)
         }
 
         private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
             context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        private fun workDoneIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
+            context, 2, Intent(context, DoneReceiver::class.java).putExtra(EXTRA_TIMED, true),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
         private fun doneIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
